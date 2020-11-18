@@ -12,6 +12,6 @@
       # Updates pip
       python -m pip install --upgrade pip
       # Install/update requirements
-      # python -m pip install -r requirements.txt --use-feature=2020-resolver &> /dev/null
+      python -m pip install -r requirements.txt --use-feature=2020-resolver &> /dev/null
     '';
 }
