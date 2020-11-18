@@ -11,12 +11,12 @@ import subprocess
 import sys
 import tempfile
 import yaml
+import uuid
 
 import boto3
 import click
 import docker
 import git
-import uuid
 
 from typing import List, Dict, Callable, Union
 
