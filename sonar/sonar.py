@@ -20,7 +20,7 @@ import git
 
 from typing import List, Dict, Callable, Union
 
-from template import render
+from sonar.template import render
 
 """
 Sonar takes a definition of an image building process and
