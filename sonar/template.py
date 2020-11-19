@@ -15,4 +15,8 @@ def render(path: str, template_name: str, parameters: Dict[str, str]) -> str:
         loader=jinja2.FileSystemLoader(path), undefined=jinja2.StrictUndefined
     )
 
-    return env.get_template("Dockerfile.{}".format(template_name)).render(parameters)
+    template = "Dockerfile"
+    if template_name is not None:
+        template = "Dockerfile.{}".format(template_name)
+
+    return env.get_template(template).render(parameters)

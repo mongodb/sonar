@@ -443,7 +443,7 @@ def task_dockerfile_template(ctx: Context):
     except KeyError:
         pass
 
-    dockerfile = run_dockerfile_template(ctx, template_context, ctx.stage["distro"])
+    dockerfile = run_dockerfile_template(ctx, template_context, ctx.stage.get("distro"))
 
     # TODO: replace this with what we have in "push" entry (or output maybe).
     # push = ctx.I(ctx.stage["registry"])
