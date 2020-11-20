@@ -15,12 +15,14 @@ import uuid
 
 import boto3
 import click
-import docker
 import git
 
 from typing import List, Dict, Callable, Union
 
 from sonar.template import render
+from sonar.builders.podman import podman_build
+from sonar.builders.noop import noop_build
+from sonar.builders.docker import docker_build
 
 """
 Sonar takes a definition of an image building process and
@@ -108,8 +110,9 @@ def build_dockerfile(image_from: str, statements: List[str]):
 
 
 def find_variables_to_interpolate(string) -> List[str]:
-    var_finder_re = r"\$\(inputs\.params\.(?P<var>[a-z0-9_]*)\)"
-    return re.findall(var_finder_re, string)
+    # TODO: Support unicode chars!
+    var_finder_re = r"\$\(inputs\.params\.(?P<var>\w+)\)"
+    return re.findall(var_finder_re, string, re.UNICODE)
 
 
 def find_variable_replacement(ctx: Context, variable, stage=None) -> str:
@@ -122,7 +125,9 @@ def find_variable_replacement(ctx: Context, variable, stage=None) -> str:
         if variable in ctx.inventory["vars"]:
             replacement = ctx.inventory["vars"][variable]
 
-    # Find top-level defined variables overrides
+    # Find top-level defined variables overrides,
+    # these might not be defined anywhere in the inventory file.
+    # maybe they should?
     if variable in ctx.parameters:
         replacement = ctx.parameters[variable]
 
@@ -202,10 +207,6 @@ def run_stage_script(ctx):
     output = subprocess.run(ctx.stage["script"], check=True, stdout=subprocess.PIPE)
 
     echo(ctx, "script-output", output.stdout.decode("utf-8"))
-
-
-def docker_client():
-    return docker.client.from_env()
 
 
 def find_docker_context(ctx: Context):
@@ -301,79 +302,6 @@ def create_ecr_repository(tags: List[str]):
             pass
 
 
-def buildarg_from_dict(args):
-    if args is None:
-        return ""
-
-    return " ".join(["--build-arg {}={}".format(k, v) for k, v in args.items()])
-
-
-def podman_buildid_from_subprocess_run(result) -> str:
-    return result.stdout.decode("utf-8").split("\n")[-1]
-
-
-def podman_build(
-    path: str,
-    dockerfile: str,
-    tags: List[str],
-    buildargs: Dict[str, str] = None,
-):
-    buildargs_str = buildarg_from_dict(buildargs)
-    build_command = f"podman build {path} -f {dockerfile} {buildargs_str}"
-    logging.info(build_command)
-
-    result = subprocess.run(build_command.split(), capture_output=True, check=True)
-    buildid = podman_buildid_from_subprocess_run(result)
-
-    for tag in tags:
-        tag_command = f"podman tag {buildid} {tag}".split()
-        subprocess.run(tag_command, check=True)
-
-        push_command = f"podman push {buildid} {tag}"
-        subprocess.run(push_command.split(), check=True)
-
-
-def docker_build(
-    path: str,
-    dockerfile: str,
-    tags: List[str] = None,
-    buildargs: Dict[str, str] = None,
-):
-    """Builds docker images."""
-
-    if tags is None:
-        tags = []
-    client = docker_client()
-
-    import random
-
-    # TODO(sonar): use something more appropriate
-    image_name = "sonar-docker-build-{}".format(random.randint(1, 10000))
-
-    logging.info("Path: {}".format(path))
-    logging.info("dockerfile: {}".format(dockerfile))
-    logging.info("tag: {}".format(image_name))
-    logging.info("buildargs: {}".format(buildargs))
-
-    buildargs_str = buildarg_from_dict(buildargs)
-
-    logging.info(
-        "docker build {context} -f {dockerfile} {buildargs}".format(
-            context=path, dockerfile=dockerfile, buildargs=buildargs_str
-        )
-    )
-
-    image, _ = client.images.build(
-        path=path, dockerfile=dockerfile, tag=image_name, buildargs=buildargs
-    )
-
-    for tag in tags:
-        registry, tag = tag.split(":")
-        image.tag(registry, tag=tag)
-
-        client.images.push(registry, tag=tag)
-
-
 def echo(ctx, entry_name, message, fg="white"):
     """Echoes a message"""
 
@@ -423,7 +351,7 @@ def task_docker_build(ctx: Context):
         for tag in tags:
             echo(ctx, "docker-image-push", "{}".format(tag))
 
-    except docker.errors.BuildError:
+    except Exception:
         echo(ctx, "error", "building image")
         raise
 
@@ -486,7 +414,7 @@ def process(
     echo(ctx, "image_build_start", image_name, fg="yellow")
     echo(ctx, "image_builder", builder, fg="yellow")
 
-    for idx, stage in enumerate(ctx.image["stages"]):
+    for idx, stage in enumerate(ctx.image.get("stages", [])):
         ctx.stage = stage
         name = ctx.stage["name"]
         if should_skip_stage(stage, ctx.skip_tags):
@@ -536,6 +464,8 @@ def build_context(
         builder = docker_build
     elif builder_name == "podman":
         builder = podman_build
+    elif builder_name == "noop":
+        builder = noop_build
     else:
         raise ValueError("Builder '{}' not recognized".format(builder_name))
 
