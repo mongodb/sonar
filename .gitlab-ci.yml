@@ -6,10 +6,10 @@ stages:
 
 before_script:
 - pip install -r requirements.txt
-- python setup.py install
+# - python setup.py install
 
 test:
   stage: test
   script:
-  - pytest
+  - PYTHONPATH=. pytest
 

@@ -15,7 +15,6 @@ import uuid
 
 import boto3
 import click
-import git
 
 from typing import List, Dict, Callable, Union
 
@@ -445,11 +444,6 @@ def process(
         # print(json.dumps(ctx.output, indent=2))
 
 
-def get_project_root(path):
-    repo = git.Repo(path, search_parent_directories=True)
-    return repo.git.rev_parse("--show-toplevel")
-
-
 def build_context(
     image_name: str,
     builder_name: str = "docker",
@@ -494,9 +488,4 @@ if __name__ == "__main__":
     print(args)
     d = args_to_dict(args.parameters)
 
-    cwd = os.getcwd()
-    root = get_project_root(cwd)
-    os.chdir(root)
     process(args.image, args.builder, args.pipeline, d)
-
-    os.chdir(cwd)
