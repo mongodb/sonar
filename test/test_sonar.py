@@ -1,6 +1,6 @@
 from pytest import fixture
 
-from sonar.sonar import find_skip_tags, should_skip_stage, process
+from sonar.sonar import process
 
 from unittest.mock import patch, mock_open
 
