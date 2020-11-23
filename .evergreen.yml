@@ -1,3 +1,4 @@
+# Simple Evergreen integration that runs pytests tests.
 functions:
   fetch_source:
   - command: git.get_project
@@ -5,29 +6,29 @@ functions:
       directory: sonar
 
   tests_unit:
-  # Create virtualenv
+  # 1. Create virtualenv
   - command: subprocess.exec
     type: setup
     params:
       command: virtualenv --python /opt/python/3.7/bin/python3 ./venv
-  # Install dependencies
+  # 2. Install dependencies
   - command: subprocess.exec
     type: setup
     params:
       working_dir: sonar
       command: ${workdir}/venv/bin/python -m pip install -r requirements.txt --quiet --no-warn-script-location
-  # Install sonar package
+  # 3. Install sonar package
   - command: subprocess.exec
     type: setup
     params:
       working_dir: sonar
       command: ${workdir}/venv/bin/python setup.py install
-  # Run pytest
+  # 4. Run pytest
   - command: subprocess.exec
     type: test
     params:
       working_dir: sonar
-      binary: pytest
+      binary: ${workdir}/venv/bin/python -m pytest
 
 tasks:
 - name: tests_unit
