@@ -1,0 +1,47 @@
+functions:
+  fetch_source:
+  - command: git.get_project
+    params:
+      directory: sonar
+
+  tests_unit:
+  # Create virtualenv
+  - command: subprocess.exec
+    type: setup
+    params:
+      command: virtualenv --python /opt/python/3.7/bin/python3 ./venv
+  # Install dependencies
+  - command: subprocess.exec
+    type: setup
+    params:
+      working_dir: sonar
+      command: ${workdir}/venv/bin/python -m pip install -r requirements.txt --quiet --no-warn-script-location
+  # Install sonar package
+  - command: subprocess.exec
+    type: setup
+    params:
+      working_dir: sonar
+      command: ${workdir}/venv/bin/python setup.py install
+  # Run pytest
+  - command: subprocess.exec
+    type: test
+    params:
+      working_dir: sonar
+      binary: pytest
+
+tasks:
+- name: tests_unit
+  tags: ["tests"]
+  commands:
+  - func: fetch_source
+  - func: tests_unit
+
+
+buildvariants:
+- name: tests_unit
+  display_name: tests_unit
+  run_on:
+  - ubuntu1604-test
+  stepback: true
+  tasks:
+  - name: tests_unit
