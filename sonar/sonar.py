@@ -16,7 +16,7 @@ import uuid
 import boto3
 import click
 
-from typing import List, Dict, Callable, Union
+from typing import List, Dict, Callable, Union, Tuple
 
 from sonar.template import render
 from sonar.builders.podman import podman_build
@@ -42,7 +42,9 @@ logging.basicConfig(level=LOGLEVEL)
 
 @dataclass
 class Builder:
-    build: Callable[[str, str, str, str, Dict[str, str]], None]
+    build: Tuple[
+        Callable[[str, str, str, str, Dict[str, str]], None], Callable[[str], None]
+    ]
 
 
 @dataclass
@@ -55,6 +57,7 @@ class Context:
     builder: Builder
 
     skip_tags: Dict[str, str] = None
+    include_tags: Dict[str, str] = None
 
     stage: Dict[str, str] = None
 
@@ -234,6 +237,16 @@ def should_skip_stage(stage: Dict[str, str], tags: List[str]) -> bool:
     return not set(stage["tags"]).isdisjoint(set(tags))
 
 
+def should_include_stage(stage: Dict[str, str], tags: List[str]) -> bool:
+    """Checks if this stage should be included in the run. If tags is empty,
+    then all stages should be run, included this one."""
+    if len(tags) == 0:
+        # We don't have "include_tags" so all tasks should run
+        return True
+
+    return not set(tags).isdisjoint(set(stage["tags"]))
+
+
 def task_dockerfile_create(ctx: Context):
     """Writes a simple Dockerfile from SCRATCH and a bunch of ADD statements. This
     is intended to build a 'context' Dockerfile, this is, a Dockerfile that's
@@ -344,8 +357,9 @@ def task_docker_build(ctx: Context):
             tag = "{}:{}".format(output["registry"], output["tag"])
             tags.append(ctx.I(tag))
 
-        create_ecr_repository(tags)
-        ctx.builder(docker_context, dockerfile, tags, buildargs)
+        # TODO: implement a proper solution for this.
+        ctx.builder[1](tags)
+        ctx.builder[0](docker_context, dockerfile, tags, buildargs)
 
         for tag in tags:
             echo(ctx, "docker-image-push", "{}".format(tag))
@@ -383,19 +397,37 @@ def task_dockerfile_template(ctx: Context):
 
 
 def find_skip_tags(params: Union[None, Dict[str, str]] = None) -> List[str]:
+    """Returns a list of tags passed in params that should be excluded from the build."""
     if params is None:
         params = {}
 
     if "skip_tags" not in params:
-        return
+        return []
 
     skip_tags = params["skip_tags"]
     del params["skip_tags"]
 
     if isinstance(skip_tags, str):
-        skip_tags = skip_tags.split(",")
+        skip_tags = [t.strip() for t in skip_tags.split(",") if t != ""]
 
     return skip_tags
+
+
+def find_include_tags(params: Union[None, Dict[str, str]] = None) -> List[str]:
+    """Returns a list of tags passed in params that should be included in the build."""
+    if params is None:
+        params = {}
+
+    if "include_tags" not in params:
+        return []
+
+    tags = params["include_tags"]
+    del params["include_tags"]
+
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(",") if t != ""]
+
+    return tags
 
 
 def process(
@@ -417,7 +449,11 @@ def process(
         ctx.stage = stage
         name = ctx.stage["name"]
         if should_skip_stage(stage, ctx.skip_tags):
-            echo(ctx, "skipping-task", name, fg="green")
+            echo(ctx, "skipping-stage", name, fg="green")
+            continue
+
+        if not should_include_stage(stage, ctx.include_tags):
+            echo(ctx, "skipping-stage", name, fg="green")
             continue
 
         echo(
@@ -453,26 +489,28 @@ def build_context(
     and the `I` interpolation function."""
     image = find_image(image_name)
 
-    builder = None
+    build, create_registry = None, None
     if builder_name == "docker":
-        builder = docker_build
+        build, create_registry = docker_build, create_ecr_repository
     elif builder_name == "podman":
-        builder = podman_build
+        build, create_registry = podman_build, create_ecr_repository
     elif builder_name == "noop":
-        builder = noop_build
+        build, create_registry = noop_build, lambda x: x
     else:
         raise ValueError("Builder '{}' not recognized".format(builder_name))
 
     build_args = build_args.copy()
     skip_tags = find_skip_tags(build_args)
+    include_tags = find_include_tags(build_args)
     logging.debug("Should skip tags {}".format(skip_tags))
 
     return Context(
         inventory=inventory(),
         image=image,
-        builder=builder,
+        builder=(build, create_registry),
         parameters=build_args,
         skip_tags=skip_tags,
+        include_tags=include_tags,
     )
 
 

@@ -79,7 +79,7 @@ def test_skip_tags():
     assert "skip_tags" not in params
 
     tags = find_skip_tags()
-    assert tags is None
+    assert tags == []
 
     params = {
         "some": "thing",

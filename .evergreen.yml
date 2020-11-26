@@ -27,7 +27,7 @@ functions:
     type: test
     params:
       working_dir: sonar
-      binary: pytest
+      command: ${workdir}/venv/bin/pytest
 
 tasks:
 - name: tests_unit
