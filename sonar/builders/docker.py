@@ -48,3 +48,25 @@ def docker_build(
         image.tag(registry, tag=tag)
 
         client.images.push(registry, tag=tag)
+
+
+def docker_pull(
+    image: str,
+    tag: str,
+):
+    client = docker_client()
+
+    return client.images.pull(image, tag=tag)
+
+
+def docker_tag(
+    image: docker.models.images.Image,
+    registry: str,
+    tag: str,
+):
+    image.tag(registry, tag)
+
+
+def docker_push(registry: str, tag: str):
+    client = docker_client()
+    client.images.push(registry, tag=tag)

@@ -16,7 +16,6 @@ def cs0(ys0):
     with patch("builtins.open", mock_open(read_data=ys0)) as mock_file:
         ctx = build_context(
             image_name="image0",
-            builder_name="docker",
             build_args={},
         )
         ctx.stage = ctx.image["stages"][0]
@@ -35,7 +34,6 @@ def cs1(ys1):
     with patch("builtins.open", mock_open(read_data=ys1)) as mock_file:
         ctx = build_context(
             image_name="image0",
-            builder_name="docker",
             build_args={},
         )
         ctx.stage = ctx.image["stages"][0]
@@ -54,7 +52,6 @@ def cs2(ys2):
     with patch("builtins.open", mock_open(read_data=ys2)) as mock_file:
         ctx = build_context(
             image_name="image0",
-            builder_name="docker",
             build_args={
                 "image_input0": "🐳",
                 "image_input1": "🎄",
@@ -118,7 +115,6 @@ def test_should_skip_tags():
 
 def test_build_context(cs0):
     ctx = cs0
-    assert ctx.builder.__name__ == "docker_build"
     assert ctx.image_name == "image0"
     assert ctx.skip_tags == None
     assert ctx.parameters == {}
@@ -176,7 +172,6 @@ def test_variable_interpolation_stage_parameters(ys1):
     with patch("builtins.open", mock_open(read_data=ys1)) as mock_file:
         ctx = build_context(
             image_name="image0",
-            builder_name="docker",
             build_args={"input0": "value0", "input1": "value1"},
         )
 
@@ -204,7 +199,6 @@ def test_variable_interpolation_stage_parameters_funny(ys1):
     with patch("builtins.open", mock_open(read_data=ys1)) as mock_file:
         ctx = build_context(
             image_name="image0",
-            builder_name="docker",
             build_args={"🐳": "whale", "🎄": "tree"},
         )
     ctx.stage = ctx.image["stages"][0]
