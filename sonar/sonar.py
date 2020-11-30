@@ -259,11 +259,10 @@ def task_tag_image(ctx: Context):
     """
     Pulls an image from source and pushes into destination.
     """
-    source = ctx.stage["source"]["registry"]
-    if "tag" in ctx.stage["source"]:
-        source += ":" + ctx.stage["source"]["tag"]
+    registry = ctx.stage["source"]["registry"]
+    tag = ctx.stage["source"]["tag"]
 
-    image = docker_pull(source)
+    image = docker_pull(registry, tag)
 
     for output in ctx.stage["destination"]:
         echo(

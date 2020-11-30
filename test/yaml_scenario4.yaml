@@ -1,0 +1,19 @@
+images:
+  - name: image0
+    vars:
+      context: some-context
+
+    stages:
+    - name: stage0
+      task_type: tag_image
+
+      source:
+        registry: source-registry-0
+        tag: source-tag-0
+
+      destination:
+      - registry: dest-registry-0
+        tag: dest-tag-0
+
+      - registry: dest-registry-1
+        tag: dest-tag-1

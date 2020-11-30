@@ -1,14 +1,10 @@
-from unittest.mock import patch, MagicMock
-
 import sonar
 from sonar.sonar import (
     find_include_tags,
     find_skip_tags,
     should_skip_stage,
     should_include_stage,
-    build_context,
     process,
-    create_ecr_repository,
 )
 
 import pytest
