@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from dataclasses import dataclass, field
 import argparse
 import json
@@ -18,22 +16,15 @@ import click
 
 from typing import List, Dict, Callable, Union, Tuple
 
+
+from sonar.builders.docker import (
+    docker_build,
+    docker_pull,
+    docker_tag,
+    docker_push,
+)
+
 from sonar.template import render
-
-from sonar.builders.docker import docker_build, docker_pull, docker_tag, docker_push
-
-"""
-Sonar takes a definition of an image building process and
-builds Docker images in parallel and publish them to a given
-repo/destination.
-
-It has the concept of stages an each stage has a different set of
-images and destination repos where to push them.
-
-A given stage can pick images from a previous image and move them
-to a differnet repo.
-
-"""
 
 LOGLEVEL = os.environ.get("LOGLEVEL", "WARNING").upper()
 logging.basicConfig(level=LOGLEVEL)
@@ -176,19 +167,6 @@ def build_add_statement(ctx, block) -> str:
     stmt += "{} {}\n".format(src, dst)
 
     return stmt
-
-
-def args_to_dict(parameters) -> Dict[str, str]:
-    if parameters is None:
-        return {}
-
-    d = {}
-
-    for p in parameters:
-        entry = p[0].split("=")
-        d[entry[0]] = entry[1]
-
-    return d
 
 
 def run_stage_script(ctx):
@@ -367,8 +345,9 @@ def task_docker_build(ctx: Context):
             tag = "{}:{}".format(output["registry"], output["tag"])
             tags.append(ctx.I(tag))
 
-        # TODO: implement a proper solution for this.
-        create_ecr_repository(tags)
+        # TODO: Implement a solution for creating ECR repositories based on
+        # a stage in the inventory file.
+        # create_ecr_repository(tags)
         docker_build(docker_context, dockerfile, tags, buildargs)
 
         for tag in tags:
@@ -510,17 +489,3 @@ def build_context(
         skip_tags=skip_tags,
         include_tags=include_tags,
     )
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--image")
-    parser.add_argument("-p", dest="parameters", nargs=1, action="append")
-    parser.add_argument("--pipeline", default=False, action="store_true")
-    parser.add_argument("--skip_tags", default="", type=str)
-    args = parser.parse_args()
-
-    print(args)
-    d = args_to_dict(args.parameters)
-
-    process(args.image, args.pipeline, d)

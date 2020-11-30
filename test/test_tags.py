@@ -1,4 +1,3 @@
-import sonar
 from sonar.sonar import (
     find_include_tags,
     find_skip_tags,
@@ -79,8 +78,7 @@ def test_should_skip_stage():
 
 
 @patch("sonar.sonar.docker_build")
-@patch("sonar.sonar.create_ecr_repository")
-def test_include_tags_tag0(patched_docker_build, patched_create_ecr_repository, ys3):
+def test_include_tags_tag0(patched_docker_build, ys3):
     """Only includes the stage with the corresponding tag."""
 
     build_args = {"include_tags": ["tag0"]}
@@ -92,10 +90,7 @@ def test_include_tags_tag0(patched_docker_build, patched_create_ecr_repository, 
 
 
 @patch("sonar.sonar.docker_build")
-@patch("sonar.sonar.create_ecr_repository")
-def test_include_tags_tag0_tag1(
-    patched_docker_build, patched_create_ecr_repository, ys3
-):
+def test_include_tags_tag0_tag1(patched_docker_build, ys3):
     """Only includes the stage with the corresponding tag."""
     build_args = {"include_tags": ["tag0", "tag1"]}
     with patch("builtins.open", mock_open(read_data=ys3)) as mock_file:
@@ -106,8 +101,7 @@ def test_include_tags_tag0_tag1(
 
 
 @patch("sonar.sonar.docker_build")
-@patch("sonar.sonar.create_ecr_repository")
-def test_skip_tags1(patched_docker_build, patched_create_ecr_repository, ys3):
+def test_skip_tags1(patched_docker_build, ys3):
     """Only includes the stage with the corresponding tag."""
     build_args = {"skip_tags": ["tag0"]}
     with patch("builtins.open", mock_open(read_data=ys3)) as mock_file:
@@ -128,8 +122,7 @@ def test_skip_tags2(ys3):
 
 
 @patch("sonar.sonar.docker_build")
-@patch("sonar.sonar.create_ecr_repository")
-def test_skip_include_tags(patched_docker_build, patched_create_ecr_repository, ys3):
+def test_skip_include_tags(patched_docker_build, ys3):
     """Only includes the stage with the corresponding tag."""
 
     build_args = {"skip_tags": ["tag0"], "include_tags": ["tag1"]}
@@ -137,6 +130,5 @@ def test_skip_include_tags(patched_docker_build, patched_create_ecr_repository, 
         pipeline = process(image_name="image0", pipeline=True, build_args=build_args)
 
     patched_docker_build.assert_called_once()
-    patched_create_ecr_repository.assert_called_once()
     assert pipeline["image0"]["stage0"] == {"skipping-stage": "stage0"}
     assert "skipping-stage" not in pipeline["image0"]["stage1"]
