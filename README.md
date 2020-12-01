@@ -1,4 +1,4 @@
-# Sonar
+# Sonar 🐳
 
 Work with multiple Docker images easily.
 
@@ -46,7 +46,7 @@ images:
 To execute this inventory file, you can do:
 
 ```
-$ python sonar.py --image-name sonar-test-runner
+$ python sonar.py --image sonar-test-runner
 
 image_build_start: sonar-test-runner
 Stage started build-sonar-tester-image: 1/1
@@ -56,7 +56,7 @@ docker-image-push: localhost:5000/sonar-tester-image:799170de-74a0-4310-a674-d70
 At the end of this phase, you'll have a Docker image tagged as `localhost:5000/sonar-tester-image:799170de-74a0-4310-a674-d704b83f2ed2`
 that you will be able to run with:
 
-``` sh
+```
 $ docker run localhost:5000/sonar-tester-image:799170de-74a0-4310-a674-d704b83f2ed2
 ============================= test session starts ==============================
 platform linux -- Python 3.7.9, pytest-6.1.2, py-1.9.0, pluggy-0.13.1

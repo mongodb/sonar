@@ -73,7 +73,7 @@ def test_skip_tags():
     assert len(tags) == 2
     assert tags[0] == "ubi"
     assert tags[1] == "rhel"
-    assert "skip_tags" not in params
+    assert "skip_tags" in params
 
     tags = find_skip_tags()
     assert tags == []
@@ -86,7 +86,7 @@ def test_skip_tags():
     tags = find_skip_tags(params)
     assert len(tags) == 1
     assert tags[0] == "ubi"
-    assert "skip_tags" not in params
+    assert "skip_tags" in params
     assert "some" in params
 
 

@@ -1,9 +1,13 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 import logging
 import random
 
 import docker
-from . import buildarg_from_dict
+from . import (
+    buildarg_from_dict,
+    SonarBuildError,
+    SonarAPIError,
+)
 
 
 def docker_client():
@@ -13,12 +17,8 @@ def docker_client():
 def docker_build(
     path: str,
     dockerfile: str,
-    tags: List[str] = None,
-    buildargs: Dict[str, str] = None,
+    buildargs: Optional[Dict[str, str]] = None,
 ):
-    if tags is None:
-        tags = []
-
     client = docker_client()
 
     image_name = "sonar-docker-build-{}".format(random.randint(1, 10000))
@@ -36,15 +36,16 @@ def docker_build(
         )
     )
 
-    image, _ = client.images.build(
-        path=path, dockerfile=dockerfile, tag=image_name, buildargs=buildargs
-    )
+    try:
+        image, _ = client.images.build(
+            path=path, dockerfile=dockerfile, tag=image_name, buildargs=buildargs
+        )
+        return image
+    except (docker.errors.BuildError) as e:
+        raise SonarBuildError from e
 
-    for tag in tags:
-        registry, tag = tag.rsplit(":", 1)
-        image.tag(registry, tag=tag)
-
-        client.images.push(registry, tag=tag)
+    except (docker.errors.APIError) as e:
+        raise SonarAPIError from e
 
 
 def docker_pull(
@@ -53,7 +54,10 @@ def docker_pull(
 ):
     client = docker_client()
 
-    return client.images.pull(image, tag=tag)
+    try:
+        return client.images.pull(image, tag=tag)
+    except docker.errors.APIError as e:
+        raise SonarAPIError from e
 
 
 def docker_tag(
@@ -61,9 +65,16 @@ def docker_tag(
     registry: str,
     tag: str,
 ):
-    image.tag(registry, tag)
+    try:
+        return image.tag(registry, tag)
+    except docker.errors.APIError as e:
+        raise SonarAPIError from e
 
 
 def docker_push(registry: str, tag: str):
     client = docker_client()
-    client.images.push(registry, tag=tag)
+
+    try:
+        client.images.push(registry, tag=tag)
+    except docker.errors.APIError as e:
+        raise SonarAPIError from e
