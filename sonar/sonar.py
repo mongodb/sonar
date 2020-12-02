@@ -218,20 +218,22 @@ def task_tag_image(ctx: Context):
     """
     Pulls an image from source and pushes into destination.
     """
-    registry = ctx.stage["source"]["registry"]
-    tag = ctx.stage["source"]["tag"]
+    registry = ctx.I(ctx.stage["source"]["registry"])
+    tag = ctx.I(ctx.stage["source"]["tag"])
 
     image = docker_pull(registry, tag)
 
     for output in ctx.stage["destination"]:
+        registry = ctx.I(output["registry"])
+        tag = ctx.I(output["tag"])
         echo(
             ctx,
             "docker-image-push",
-            "{}".format(output["registry"] + ":" + output["tag"]),
+            "{}:{}".format(registry, tag),
         )
 
-        docker_tag(image, output["registry"], output["tag"])
-        docker_push(output["registry"], output["tag"])
+        docker_tag(image, registry, tag)
+        docker_push(registry, tag)
 
 
 def get_rendering_params(ctx: Context):

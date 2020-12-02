@@ -19,18 +19,19 @@ def docker_build(
     dockerfile: str,
     buildargs: Optional[Dict[str, str]] = None,
 ):
+    """Builds a docker image."""
     client = docker_client()
 
     image_name = "sonar-docker-build-{}".format(random.randint(1, 10000))
 
-    logging.debug("Path: {}".format(path))
-    logging.debug("dockerfile: {}".format(dockerfile))
-    logging.debug("tag: {}".format(image_name))
-    logging.debug("buildargs: {}".format(buildargs))
+    logging.info("Path: {}".format(path))
+    logging.info("dockerfile: {}".format(dockerfile))
+    logging.info("tag: {}".format(image_name))
+    logging.info("buildargs: {}".format(buildargs))
 
     buildargs_str = buildarg_from_dict(buildargs)
 
-    logging.debug(
+    logging.info(
         "docker build {context} -f {dockerfile} {buildargs}".format(
             context=path, dockerfile=dockerfile, buildargs=buildargs_str
         )

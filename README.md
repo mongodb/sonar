@@ -21,7 +21,7 @@ unit tests. This [inventory.yaml](inventory.yaml) is:
 
 ``` yaml
 vars:
-  # start a local registry with:
+  # start a local Docker registry with:
   # docker run -d -p 5000:5000 --restart=always --name registry registry:2
   registry: localhost:5000
 
@@ -31,6 +31,8 @@ images:
   vars:
     context: .
 
+  # First stage builds a Docker image. The resulting image will be
+  # pushed to the registry in the `output` section.
   stages:
   - name: build-sonar-tester-image
     task_type: docker_build
@@ -39,6 +41,19 @@ images:
 
     output:
     - registry: $(inputs.params.registry)/sonar-tester-image
+      tag: $(inputs.params.version_id)
+
+  # Second stage pushes the previously built image into a new
+  # registry.
+  - name: tag-image
+    task_type: tag_image
+
+    source:
+      registry: $(inputs.params.registry)/sonar-tester-image
+      tag: $(inputs.params.version_id)
+
+    destination:
+    - registry: $(inputs.params.registry)/sonar-tester-image-copy
       tag: $(inputs.params.version_id)
 
 ```

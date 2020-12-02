@@ -77,8 +77,12 @@ def test_should_skip_stage():
     assert not should_skip_stage({"tags": ["a", "b"]}, ["c"])
 
 
+@patch("sonar.sonar.docker_push")
+@patch("sonar.sonar.docker_tag")
 @patch("sonar.sonar.docker_build")
-def test_include_tags_tag0(patched_docker_build, ys3):
+def test_include_tags_tag0(
+    patched_docker_build, patched_docker_tag, patched_docker_push, ys3
+):
     """Only includes the stage with the corresponding tag."""
 
     build_args = {"include_tags": ["tag0"]}
@@ -91,8 +95,12 @@ def test_include_tags_tag0(patched_docker_build, ys3):
     assert pipeline["image0"]["stage1"] == {"skipping-stage": "stage1"}
 
 
+@patch("sonar.sonar.docker_push")
+@patch("sonar.sonar.docker_tag")
 @patch("sonar.sonar.docker_build")
-def test_include_tags_tag0_tag1(patched_docker_build, ys3):
+def test_include_tags_tag0_tag1(
+    patched_docker_build, patched_docker_tag, patched_docker_push, ys3
+):
     """Only includes the stage with the corresponding tag."""
     build_args = {"include_tags": ["tag0", "tag1"]}
     with patch("builtins.open", mock_open(read_data=ys3)) as mock_file:
@@ -104,8 +112,10 @@ def test_include_tags_tag0_tag1(patched_docker_build, ys3):
     assert "skipping-stage" not in pipeline["image0"]["stage1"]
 
 
+@patch("sonar.sonar.docker_push")
+@patch("sonar.sonar.docker_tag")
 @patch("sonar.sonar.docker_build")
-def test_skip_tags1(patched_docker_build, ys3):
+def test_skip_tags1(patched_docker_build, patched_docker_tag, patched_docker_push, ys3):
     """Only includes the stage with the corresponding tag."""
     build_args = {"skip_tags": ["tag0"]}
     with patch("builtins.open", mock_open(read_data=ys3)) as mock_file:
@@ -129,8 +139,12 @@ def test_skip_tags2(ys3):
     assert pipeline["image0"]["stage1"] == {"skipping-stage": "stage1"}
 
 
+@patch("sonar.sonar.docker_push")
+@patch("sonar.sonar.docker_tag")
 @patch("sonar.sonar.docker_build")
-def test_skip_include_tags(patched_docker_build, ys3):
+def test_skip_include_tags(
+    patched_docker_build, patched_docker_tag, patched_docker_push, ys3
+):
     """Only includes the stage with the corresponding tag."""
 
     build_args = {"skip_tags": ["tag0"], "include_tags": ["tag1"]}

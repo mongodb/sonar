@@ -18,6 +18,9 @@ def convert_parser_arguments_to_key_value(parameters: List[str]) -> Dict[str, st
     `["key1=value1", "key2=value2"]`
 
     This function will convert this List into a Dict of (key, value).
+
+    >>> convert_parser_arguments_to_key_value(["a=1", "b=2"])
+    {"a": "1", "b": "2"}
     """
     if parameters is None:
         return {}
@@ -39,9 +42,9 @@ def main():
     parser.add_argument("--skip_tags", default="", type=str)
     args = parser.parse_args()
 
-    d = convert_parser_arguments_to_key_value(args.parameters)
+    build_args = convert_parser_arguments_to_key_value(args.parameters)
 
-    process_image(args.image, args.pipeline, d)
+    process_image(args.image, args.pipeline, build_args)
 
 
 if __name__ == "__main__":

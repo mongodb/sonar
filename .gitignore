@@ -7,3 +7,5 @@ tmp/
 *.egg
 build
 htmlcov
+
+sonar.egg-info/*
