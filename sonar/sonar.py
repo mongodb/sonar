@@ -1,48 +1,25 @@
-#!/usr/bin/env python3
-
-from dataclasses import dataclass, field
 import argparse
 import json
 import logging
-import re
 import os
-from shutil import copyfile
+import re
 import subprocess
 import sys
 import tempfile
-import yaml
 import uuid
+from dataclasses import dataclass, field
+from shutil import copyfile
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import boto3
 import click
+import yaml
 
-from typing import List, Dict, Callable, Union
-
+from sonar.builders.docker import docker_build, docker_pull, docker_push, docker_tag
 from sonar.template import render
-from sonar.builders.podman import podman_build
-from sonar.builders.noop import noop_build
-from sonar.builders.docker import docker_build
-
-"""
-Sonar takes a definition of an image building process and
-builds Docker images in parallel and publish them to a given
-repo/destination.
-
-It has the concept of stages an each stage has a different set of
-images and destination repos where to push them.
-
-A given stage can pick images from a previous image and move them
-to a differnet repo.
-
-"""
 
 LOGLEVEL = os.environ.get("LOGLEVEL", "WARNING").upper()
 logging.basicConfig(level=LOGLEVEL)
-
-
-@dataclass
-class Builder:
-    build: Callable[[str, str, str, str, Dict[str, str]], None]
 
 
 @dataclass
@@ -52,9 +29,9 @@ class Context:
 
     # Store parameters passed as arguments
     parameters: Dict[str, str]
-    builder: Builder
 
     skip_tags: Dict[str, str] = None
+    include_tags: Dict[str, str] = None
 
     stage: Dict[str, str] = None
 
@@ -109,7 +86,6 @@ def build_dockerfile(image_from: str, statements: List[str]):
 
 
 def find_variables_to_interpolate(string) -> List[str]:
-    # TODO: Support unicode chars!
     var_finder_re = r"\$\(inputs\.params\.(?P<var>\w+)\)"
     return re.findall(var_finder_re, string, re.UNICODE)
 
@@ -185,29 +161,6 @@ def build_add_statement(ctx, block) -> str:
     return stmt
 
 
-def args_to_dict(parameters) -> Dict[str, str]:
-    if parameters is None:
-        return {}
-
-    d = {}
-
-    for p in parameters:
-        entry = p[0].split("=")
-        d[entry[0]] = entry[1]
-
-    return d
-
-
-def run_stage_script(ctx):
-    if "script" not in ctx.stage:
-        raise ValueError("Stage should contain a 'script' attribute.")
-
-    echo(ctx, "execute-script", ctx.stage["script"])
-    output = subprocess.run(ctx.stage["script"], check=True, stdout=subprocess.PIPE)
-
-    echo(ctx, "script-output", output.stdout.decode("utf-8"))
-
-
 def find_docker_context(ctx: Context):
     if ctx.stage is not None:
         if "vars" in ctx.stage and "context" in ctx.stage["vars"]:
@@ -222,23 +175,32 @@ def find_docker_context(ctx: Context):
     raise ValueError("No context defined for image or stage")
 
 
-def task_script_runner(ctx: Context):
-    # Run before "building" the image
-    run_stage_script(ctx)
-
-
-def should_skip_stage(stage: Dict[str, str], tags: List[str]) -> bool:
-    if "tags" not in stage:
+def should_skip_stage(stage: Dict[str, str], skip_tags: List[str]) -> bool:
+    """Checks if this stage should be skipped."""
+    stage_tags = stage.get("tags", [])
+    if len(stage_tags) == 0:
         return False
 
-    return not set(stage["tags"]).isdisjoint(set(tags))
+    return not set(stage_tags).isdisjoint(skip_tags)
+
+
+def should_include_stage(stage: Dict[str, str], include_tags: List[str]) -> bool:
+    """Checks if this stage should be included in the run. If tags is empty,
+    then all stages should be run, included this one."""
+    stage_tags = stage.get("tags", [])
+    if len(include_tags) == 0:
+        # We don't have "include_tags" so all tasks should run
+        return True
+
+    return not set(stage_tags).isdisjoint(include_tags)
 
 
 def task_dockerfile_create(ctx: Context):
-    """Writes a simple Dockerfile from SCRATCH and a bunch of ADD statements. This
+    """Writes a simple Dockerfile from SCRATCH and ADD statements. This
     is intended to build a 'context' Dockerfile, this is, a Dockerfile that's
     not runnable but contains data.
 
+    DEPRECATED: Use dockerfile_template or docker_build instead.
     """
     docker_context = find_docker_context(ctx)
 
@@ -250,6 +212,28 @@ def task_dockerfile_create(ctx: Context):
             fd.write(build_add_statement(ctx, f))
 
     echo(ctx, "dockerfile-save-location", output_dockerfile)
+
+
+def task_tag_image(ctx: Context):
+    """
+    Pulls an image from source and pushes into destination.
+    """
+    registry = ctx.I(ctx.stage["source"]["registry"])
+    tag = ctx.I(ctx.stage["source"]["tag"])
+
+    image = docker_pull(registry, tag)
+
+    for output in ctx.stage["destination"]:
+        registry = ctx.I(output["registry"])
+        tag = ctx.I(output["tag"])
+        echo(
+            ctx,
+            "docker-image-push",
+            "{}:{}".format(registry, tag),
+        )
+
+        docker_tag(image, registry, tag)
+        docker_push(registry, tag)
 
 
 def get_rendering_params(ctx: Context):
@@ -336,23 +320,17 @@ def task_docker_build(ctx: Context):
     docker_context = find_docker_context(ctx)
     dockerfile = ctx.I(ctx.stage["dockerfile"])
 
-    try:
-        buildargs = interpolate_buildargs(ctx, ctx.stage.get("buildargs", {}))
+    buildargs = interpolate_buildargs(ctx, ctx.stage.get("buildargs", {}))
 
-        tags = []
-        for output in ctx.stage["output"]:
-            tag = "{}:{}".format(output["registry"], output["tag"])
-            tags.append(ctx.I(tag))
+    image = docker_build(docker_context, dockerfile, buildargs)
 
-        create_ecr_repository(tags)
-        ctx.builder(docker_context, dockerfile, tags, buildargs)
+    for output in ctx.stage["output"]:
+        registry = ctx.I(output["registry"])
+        tag = ctx.I(output["tag"])
 
-        for tag in tags:
-            echo(ctx, "docker-image-push", "{}".format(tag))
-
-    except Exception:
-        echo(ctx, "error", "building image")
-        raise
+        echo(ctx, "docker-image-push", "{}:{}".format(registry, tag))
+        docker_tag(image, registry, tag)
+        docker_push(registry, tag)
 
 
 def task_dockerfile_template(ctx: Context):
@@ -362,18 +340,12 @@ def task_dockerfile_template(ctx: Context):
     template_context = docker_context
 
     try:
-        # Use a template_context for running dockerfile_generator.py in case
-        # this is needed. This is relevant for multi-stage images that require
-        # the full project to be built, so their docker_context is different
-        # from the directory where dockerfile_generator should run.
         template_context = ctx.image["vars"]["template_context"]
     except KeyError:
         pass
 
     dockerfile = run_dockerfile_template(ctx, template_context, ctx.stage.get("distro"))
 
-    # TODO: replace this with what we have in "push" entry (or output maybe).
-    # push = ctx.I(ctx.stage["registry"])
     for output in ctx.stage["output"]:
         if "dockerfile" in output:
             output_dockerfile = ctx.I(output["dockerfile"])
@@ -382,47 +354,59 @@ def task_dockerfile_template(ctx: Context):
             echo(ctx, "dockerfile-save-location", output_dockerfile)
 
 
-def find_skip_tags(params: Union[None, Dict[str, str]] = None) -> List[str]:
+def find_skip_tags(params: Optional[Dict[str, str]] = None) -> List[str]:
+    """Returns a list of tags passed in params that should be excluded from the build."""
     if params is None:
         params = {}
 
-    if "skip_tags" not in params:
-        return
+    tags = params.get("skip_tags", [])
 
-    skip_tags = params["skip_tags"]
-    del params["skip_tags"]
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(",") if t != ""]
 
-    if isinstance(skip_tags, str):
-        skip_tags = skip_tags.split(",")
-
-    return skip_tags
+    return tags
 
 
-def process(
+def find_include_tags(params: Optional[Dict[str, str]] = None) -> List[str]:
+    """Returns a list of tags passed in params that should be included in the build."""
+    if params is None:
+        params = {}
+
+    tags = params.get("include_tags", [])
+
+    if isinstance(tags, str):
+        tags = [t.strip() for t in tags.split(",") if t != ""]
+
+    return tags
+
+
+def process_image(
     image_name: str,
-    builder: str = "docker",
     pipeline: bool = True,
-    build_args: Union[None, Dict[str, str]] = None,
+    build_args: Optional[Dict[str, str]] = None,
 ):
     if build_args is None:
         build_args = {}
 
-    ctx = build_context(image_name, builder, build_args)
+    ctx = build_context(image_name, build_args)
     ctx.pipeline = pipeline
 
     echo(ctx, "image_build_start", image_name, fg="yellow")
-    echo(ctx, "image_builder", builder, fg="yellow")
 
     for idx, stage in enumerate(ctx.image.get("stages", [])):
         ctx.stage = stage
         name = ctx.stage["name"]
         if should_skip_stage(stage, ctx.skip_tags):
-            echo(ctx, "skipping-task", name, fg="green")
+            echo(ctx, "skipping-stage", name, fg="green")
+            continue
+
+        if not should_include_stage(stage, ctx.include_tags):
+            echo(ctx, "skipping-stage", name, fg="green")
             continue
 
         echo(
             ctx,
-            "Stage started {}".format(stage["name"]),
+            "stage-started {}".format(stage["name"]),
             "{}/{}".format(idx + 1, len(ctx.image["stages"])),
         )
 
@@ -432,8 +416,8 @@ def process(
             task_dockerfile_template(ctx)
         elif stage["task_type"] == "docker_build":
             task_docker_build(ctx)
-        elif stage["task_type"] == "script_runner":
-            task_script_runner(ctx)
+        elif stage["task_type"] == "tag_image":
+            task_tag_image(ctx)
         else:
             raise NotImplementedError(
                 "task_type {} not supported".format(stage["task_type"])
@@ -441,51 +425,25 @@ def process(
 
     if ctx.pipeline:
         return ctx.output
-        # print(json.dumps(ctx.output, indent=2))
 
 
 def build_context(
     image_name: str,
-    builder_name: str = "docker",
-    build_args: Union[None, Dict[str, str]] = None,
+    build_args: Optional[Dict[str, str]] = None,
 ) -> Context:
     """A Context includes the whole inventory, the image to build, the current stage,
     and the `I` interpolation function."""
     image = find_image(image_name)
 
-    builder = None
-    if builder_name == "docker":
-        builder = docker_build
-    elif builder_name == "podman":
-        builder = podman_build
-    elif builder_name == "noop":
-        builder = noop_build
-    else:
-        raise ValueError("Builder '{}' not recognized".format(builder_name))
-
     build_args = build_args.copy()
     skip_tags = find_skip_tags(build_args)
+    include_tags = find_include_tags(build_args)
     logging.debug("Should skip tags {}".format(skip_tags))
 
     return Context(
         inventory=inventory(),
         image=image,
-        builder=builder,
         parameters=build_args,
         skip_tags=skip_tags,
+        include_tags=include_tags,
     )
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--image")
-    parser.add_argument("-p", dest="parameters", nargs=1, action="append")
-    parser.add_argument("--pipeline", default=False, action="store_true")
-    parser.add_argument("--builder", default="docker", type=str)
-    parser.add_argument("--skip_tags", default="", type=str)
-    args = parser.parse_args()
-
-    print(args)
-    d = args_to_dict(args.parameters)
-
-    process(args.image, args.builder, args.pipeline, d)
