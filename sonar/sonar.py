@@ -1,29 +1,21 @@
-from dataclasses import dataclass, field
 import argparse
 import json
 import logging
-import re
 import os
-from shutil import copyfile
+import re
 import subprocess
 import sys
 import tempfile
-import yaml
 import uuid
+from dataclasses import dataclass, field
+from shutil import copyfile
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import boto3
 import click
+import yaml
 
-from typing import List, Dict, Callable, Union, Tuple, Optional
-
-
-from sonar.builders.docker import (
-    docker_build,
-    docker_pull,
-    docker_tag,
-    docker_push,
-)
-
+from sonar.builders.docker import docker_build, docker_pull, docker_push, docker_tag
 from sonar.template import render
 
 LOGLEVEL = os.environ.get("LOGLEVEL", "WARNING").upper()
