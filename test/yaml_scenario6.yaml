@@ -1,0 +1,13 @@
+images:
+  - name: image0
+    vars:
+      context: some-context
+
+    stages:
+    - name: stage0
+      task_type: docker_build
+
+      dockerfile: https://somedomain/dockerfile
+      output:
+      - registry: some-registry
+        tag: something

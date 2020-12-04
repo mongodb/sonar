@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import tempfile
+from urllib.request import urlretrieve
 import uuid
 from dataclasses import dataclass, field
 from shutil import copyfile
@@ -315,10 +316,24 @@ def echo(ctx, entry_name, message, fg="white"):
     click.secho("{}{}: {}".format(stage_title, entry_name, message), fg=fg, err=err)
 
 
+def find_dockerfile(dockerfile: str):
+    """Returns a Dockerfile file location that can be local or remote. If remote it
+    will be downloaded into a temporary location first."""
+
+    if dockerfile.startswith("https://"):
+        tmpfile = tempfile.NamedTemporaryFile(delete=False)
+        urlretrieve(dockerfile, tmpfile.name)
+
+        return tmpfile.name
+
+    return dockerfile
+
+
 def task_docker_build(ctx: Context):
     name = ctx.stage["name"]
     docker_context = find_docker_context(ctx)
-    dockerfile = ctx.I(ctx.stage["dockerfile"])
+
+    dockerfile = find_dockerfile(ctx.I(ctx.stage["dockerfile"]))
 
     buildargs = interpolate_buildargs(ctx, ctx.stage.get("buildargs", {}))
 
