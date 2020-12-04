@@ -14,7 +14,7 @@ def ys4():
 @patch("sonar.sonar.docker_push")
 def test_tag_image(patched_docker_push, patched_docker_tag, patched_docker_pull, ys4):
     with patch("builtins.open", mock_open(read_data=ys4)) as mock_file:
-        pipeline = process_image(image_name="image0", pipeline=True, build_args={})
+        pipeline = process_image(image_name="image0", skip_tags=[], include_tags=[], pipeline=True, build_args={})
 
     patched_docker_pull.assert_called_once_with(
         "source-registry-0-test_value0", "source-tag-0-test_value1"

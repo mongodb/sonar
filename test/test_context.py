@@ -16,6 +16,8 @@ def cs0(ys0):
     with patch("builtins.open", mock_open(read_data=ys0)) as mock_file:
         ctx = build_context(
             image_name="image0",
+            skip_tags=[],
+            include_tags=[],
             build_args={},
         )
         ctx.stage = ctx.image["stages"][0]
@@ -34,6 +36,8 @@ def cs1(ys1):
     with patch("builtins.open", mock_open(read_data=ys1)) as mock_file:
         ctx = build_context(
             image_name="image0",
+            skip_tags=[],
+            include_tags=[],
             build_args={},
         )
         ctx.stage = ctx.image["stages"][0]
@@ -52,6 +56,8 @@ def cs2(ys2):
     with patch("builtins.open", mock_open(read_data=ys2)) as mock_file:
         ctx = build_context(
             image_name="image0",
+            skip_tags=[],
+            include_tags=[],
             build_args={
                 "image_input0": "🐳",
                 "image_input1": "🎄",
@@ -123,7 +129,7 @@ def test_build_context(cs0):
 def test_build_context(ys0):
     with patch("builtins.open", mock_open(read_data=ys0)) as mock_file:
         with pytest.raises(ValueError, match="Image image1 not found"):
-            build_context(image_name="image1")
+            build_context(image_name="image1", skip_tags=[], include_tags=[])
 
 
 def test_variable_interpolation0(cs1):
@@ -172,6 +178,8 @@ def test_variable_interpolation_stage_parameters(ys1):
     with patch("builtins.open", mock_open(read_data=ys1)) as mock_file:
         ctx = build_context(
             image_name="image0",
+            skip_tags=[],
+            include_tags=[],
             build_args={"input0": "value0", "input1": "value1"},
         )
 
@@ -199,9 +207,67 @@ def test_variable_interpolation_stage_parameters_funny(ys1):
     with patch("builtins.open", mock_open(read_data=ys1)) as mock_file:
         ctx = build_context(
             image_name="image0",
+            skip_tags=[],
+            include_tags=[],
             build_args={"🐳": "whale", "🎄": "tree"},
         )
     ctx.stage = ctx.image["stages"][0]
 
     assert ctx.I("$(inputs.params.🐳)") == "whale"
     assert ctx.I("$(inputs.params.🎄)") == "tree"
+
+
+@patch("sonar.sonar.find_image", return_value={})
+def test_build_context_skip_tags_from_str(_patched_find_image):
+    ctx = build_context(
+        image_name="image-name",
+        skip_tags="skip0,skip1",
+        include_tags="included0, included1",
+        build_args={},
+    )
+
+    assert ctx.skip_tags == ["skip0", "skip1"]
+    assert ctx.include_tags == ["included0", "included1"]
+
+
+@patch("sonar.sonar.find_image", return_value={})
+def test_build_context_skip_tags_from_empty_str(_patched_find_image):
+    ctx = build_context(
+        image_name="image-name", skip_tags="", include_tags="", build_args={}
+    )
+
+    assert ctx.skip_tags == []
+    assert ctx.include_tags == []
+
+
+@patch("sonar.sonar.find_inventory", return_value={"images": {"name": "image-name"}})
+@patch("sonar.sonar.find_image", return_value={"name": "image-name"})
+def test_build_context_uses_any_inventory(patched_find_image, patched_find_inventory):
+    build_context(
+        image_name="image-name",
+        skip_tags="",
+        include_tags="",
+        build_args={},
+        inventory="other-inventory.yaml",
+    )
+
+    patched_find_image.assert_called_once_with("image-name", "other-inventory.yaml")
+    patched_find_inventory.assert_called_once_with("other-inventory.yaml")
+
+
+def test_use_specific_inventory():
+    context = build_context(
+        image_name="image0",
+        skip_tags="",
+        include_tags="",
+        build_args={"input0": "my-value"},
+        inventory="test/yaml_scenario0.yaml",
+    )
+
+    assert context.image["name"] == "image0"
+    assert context.stage is None
+
+    assert context.skip_tags == []
+    assert context.include_tags == []
+
+    assert context.I("$(inputs.params.input0)") == "my-value"

@@ -36,15 +36,18 @@ def convert_parser_arguments_to_key_value(parameters: List[str]) -> Dict[str, st
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--image")
+    parser.add_argument("--image", required=True)
     parser.add_argument("-p", dest="parameters", nargs=1, action="append")
     parser.add_argument("--pipeline", default=False, action="store_true")
-    parser.add_argument("--skip_tags", default="", type=str)
+    parser.add_argument("--skip-tags", default="", type=str)
+    parser.add_argument("--include-tags", default="", type=str)
+    parser.add_argument("--inventory", default="inventory.yaml", type=str)
+
     args = parser.parse_args()
 
     build_args = convert_parser_arguments_to_key_value(args.parameters)
 
-    process_image(args.image, args.pipeline, build_args)
+    process_image(args.image, args.skip_tags, args.include_tags, args.pipeline, build_args, args.inventory)
 
 
 if __name__ == "__main__":

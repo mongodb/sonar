@@ -61,16 +61,16 @@ class Context:
         return os.environ.get("version_id", self.stored_version_id)
 
 
-def inventory():
-    try:
-        fd = open("inventory.yaml")
-    except FileNotFoundError:
-        fd = open("sonar/inventory.yaml")
-    return yaml.safe_load(fd)
+def find_inventory(inventory: Optional[str] = None):
+    if inventory is None:
+        inventory = "inventory.yaml"
+
+    with open(inventory, "r") as f:
+        return yaml.safe_load(f)
 
 
-def find_image(image_name: str):
-    for image in inventory()["images"]:
+def find_image(image_name: str, inventory: str):
+    for image in find_inventory(inventory)["images"]:
         if image["name"] == image_name:
             return image
 
@@ -397,13 +397,16 @@ def find_include_tags(params: Optional[Dict[str, str]] = None) -> List[str]:
 
 def process_image(
     image_name: str,
+    skip_tags: Union[str, List[str]],
+    include_tags: Union[str, List[str]],
     pipeline: bool = True,
     build_args: Optional[Dict[str, str]] = None,
+    inventory: Optional[str] = None,
 ):
     if build_args is None:
         build_args = {}
 
-    ctx = build_context(image_name, build_args)
+    ctx = build_context(image_name, skip_tags, include_tags, build_args, inventory)
     ctx.pipeline = pipeline
 
     echo(ctx, "image_build_start", image_name, fg="yellow")
@@ -442,23 +445,37 @@ def process_image(
         return ctx.output
 
 
+def make_list_of_str(value: Union[None, str, List[str]]) -> List[str]:
+    if value is None:
+        return []
+
+    if isinstance(value, str):
+        if len(value) == 0:
+            return []
+
+        return [e.strip() for e in value.split(",") if e != ""]
+
+    return value
+
+
 def build_context(
     image_name: str,
+    skip_tags: Union[str, List[str]],
+    include_tags: Union[str, List[str]],
     build_args: Optional[Dict[str, str]] = None,
+    inventory: Optional[str] = None,
 ) -> Context:
     """A Context includes the whole inventory, the image to build, the current stage,
     and the `I` interpolation function."""
-    image = find_image(image_name)
+    image = find_image(image_name, inventory)
 
     build_args = build_args.copy()
-    skip_tags = find_skip_tags(build_args)
-    include_tags = find_include_tags(build_args)
     logging.debug("Should skip tags {}".format(skip_tags))
 
     return Context(
-        inventory=inventory(),
+        inventory=find_inventory(inventory),
         image=image,
         parameters=build_args,
-        skip_tags=skip_tags,
-        include_tags=include_tags,
+        skip_tags=make_list_of_str(skip_tags),
+        include_tags=make_list_of_str(include_tags),
     )
