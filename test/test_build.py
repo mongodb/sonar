@@ -12,11 +12,17 @@ from unittest.mock import patch, mock_open, MagicMock, Mock
 @patch("sonar.sonar.docker_tag")
 @patch("sonar.sonar.docker_build")
 @patch("sonar.sonar.urlretrieve")
-def test_dockerfile_from_url(patched_docker_build, patched_docker_tag, patched_docker_push, patched_urlretrive):
+def test_dockerfile_from_url(
+    patched_docker_build, patched_docker_tag, patched_docker_push, patched_urlretrive
+):
     with open("test/yaml_scenario6.yaml") as fd:
         with patch("builtins.open", mock_open(read_data=fd.read())) as _mock_file:
             pipeline = process_image(
-                image_name="image0", pipeline=True, build_args={}
+                image_name="image0",
+                skip_tags=[],
+                include_tags=[],
+                pipeline=True,
+                build_args={},
             )
 
     assert patched_urlretrive.called_once()
@@ -25,7 +31,9 @@ def test_dockerfile_from_url(patched_docker_build, patched_docker_tag, patched_d
     assert patched_docker_push.called_once()
 
 
-@patch("sonar.sonar.tempfile.NamedTemporaryFile", return_value=sn(name="random-filename"))
+@patch(
+    "sonar.sonar.tempfile.NamedTemporaryFile", return_value=sn(name="random-filename")
+)
 @patch("sonar.sonar.urlretrieve")
 def test_find_dockerfile_fetches_file_from_url(patched_urlretrieve, patched_tempfile):
     # If passed a dockerfile which starts with https://
