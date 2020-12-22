@@ -11,7 +11,7 @@ from . import (
 
 
 def docker_client():
-    return docker.client.from_env()
+    return docker.client.from_env(timeout=60*60*24)
 
 
 def docker_build(
