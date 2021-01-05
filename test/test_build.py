@@ -12,8 +12,13 @@ from unittest.mock import patch, mock_open, MagicMock, Mock
 @patch("sonar.sonar.docker_tag")
 @patch("sonar.sonar.docker_build")
 @patch("sonar.sonar.urlretrieve")
+@patch("sonar.sonar.create_ecr_repository")
 def test_dockerfile_from_url(
-    patched_docker_build, patched_docker_tag, patched_docker_push, patched_urlretrive
+    patched_docker_build,
+    patched_docker_tag,
+    patched_docker_push,
+    patched_urlretrive,
+    patched_create_ecr_repository,
 ):
     with open("test/yaml_scenario6.yaml") as fd:
         with patch("builtins.open", mock_open(read_data=fd.read())) as _mock_file:
@@ -29,6 +34,7 @@ def test_dockerfile_from_url(
     assert patched_docker_build.called_once()
     assert patched_docker_tag.called_once()
     assert patched_docker_push.called_once()
+    assert patched_create_ecr_repository.called_once()
 
 
 @patch(

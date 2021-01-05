@@ -234,6 +234,7 @@ def task_tag_image(ctx: Context):
         )
 
         docker_tag(image, registry, tag)
+        create_ecr_repository([registry])
         docker_push(registry, tag)
 
 
@@ -268,6 +269,9 @@ def interpolate_buildargs(ctx, buildargs):
 
 
 def create_ecr_repository(tags: List[str]):
+    """
+    creates ecr repository if it doesn't exist
+    """
     client = boto3.client("ecr")
 
     for tag in tags:
@@ -313,7 +317,8 @@ def echo(ctx, entry_name, message, fg="white"):
         task_title = "[{}/{}] ".format(stage_name, stage_type)
 
     # If --pipeline, these messages go to stderr
-    click.secho("{}{}: {}".format(stage_title, entry_name, message), fg=fg, err=err)
+    click.secho("{}{}: {}".format(
+        stage_title, entry_name, message), fg=fg, err=err)
 
 
 def find_dockerfile(dockerfile: str):
@@ -345,6 +350,7 @@ def task_docker_build(ctx: Context):
 
         echo(ctx, "docker-image-push", "{}:{}".format(registry, tag))
         docker_tag(image, registry, tag)
+        create_ecr_repository([registry])
         docker_push(registry, tag)
 
 
@@ -359,7 +365,8 @@ def task_dockerfile_template(ctx: Context):
     except KeyError:
         pass
 
-    dockerfile = run_dockerfile_template(ctx, template_context, ctx.stage.get("distro"))
+    dockerfile = run_dockerfile_template(
+        ctx, template_context, ctx.stage.get("distro"))
 
     for output in ctx.stage["output"]:
         if "dockerfile" in output:
@@ -406,7 +413,8 @@ def process_image(
     if build_args is None:
         build_args = {}
 
-    ctx = build_context(image_name, skip_tags, include_tags, build_args, inventory)
+    ctx = build_context(image_name, skip_tags,
+                        include_tags, build_args, inventory)
     ctx.pipeline = pipeline
 
     echo(ctx, "image_build_start", image_name, fg="yellow")
