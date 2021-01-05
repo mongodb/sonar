@@ -10,7 +10,7 @@ from . import (
 )
 
 
-def docker_client():
+def docker_client() -> docker.DockerClient:
     return docker.client.from_env(timeout=60*60*24)
 
 
@@ -76,6 +76,11 @@ def docker_push(registry: str, tag: str):
     client = docker_client()
 
     try:
-        client.images.push(registry, tag=tag)
+        resp = client.images.push(registry, tag=tag, stream=True, decode=True)
+
+        for res in resp:
+            if "error" in res:
+                raise SonarAPIError(res["error"])
+
     except docker.errors.APIError as e:
         raise SonarAPIError from e
