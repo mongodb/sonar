@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="sonar",
-    version="0.0.4",
+    version="0.0.5",
     description="Sonar Docker Building Tools",
     author="Rodrigo Valin",
     author_email="rodrigo.valin@mongodb.com",
