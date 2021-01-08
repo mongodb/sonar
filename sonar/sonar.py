@@ -354,6 +354,26 @@ def task_docker_build(ctx: Context):
         docker_push(registry, tag)
 
 
+def split_s3_location(s3loc: str) -> Tuple[str, str]:
+    if not s3loc.startswith("s3://"):
+        raise ValueError("{} is not a S3 URL".format(s3loc))
+
+    bucket, _, location = s3loc.partition("s3://")[2].partition("/")
+
+    return bucket, location
+
+
+def save_dockerfile(dockerfile: str, destination: str):
+    if destination.startswith("s3://"):
+        client = boto3.client("s3")
+        bucket, location = split_s3_location(destination)
+        client.upload_file(
+            dockerfile, bucket, location, ExtraArgs={"ACL": "public-read"}
+        )
+    else:
+        copyfile(dockerfile, destination)
+
+
 def task_dockerfile_template(ctx: Context):
     name = ctx.stage["name"]
 
@@ -365,13 +385,12 @@ def task_dockerfile_template(ctx: Context):
     except KeyError:
         pass
 
-    dockerfile = run_dockerfile_template(
-        ctx, template_context, ctx.stage.get("distro"))
+    dockerfile = run_dockerfile_template(ctx, template_context, ctx.stage.get("distro"))
 
     for output in ctx.stage["output"]:
         if "dockerfile" in output:
             output_dockerfile = ctx.I(output["dockerfile"])
-            copyfile(dockerfile, output_dockerfile)
+            save_dockerfile(dockerfile, output_dockerfile)
 
             echo(ctx, "dockerfile-save-location", output_dockerfile)
 
