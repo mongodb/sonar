@@ -1,16 +1,18 @@
-import argparse
-import json
+"""
+sonar/sonar.py
+
+Implements Sonar's main functionality.
+"""
+
 import logging
 import os
 import re
-import subprocess
-import sys
 import tempfile
 from urllib.request import urlretrieve
 import uuid
 from dataclasses import dataclass, field
 from shutil import copyfile
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Union, Tuple
 
 import boto3
 import click
@@ -19,12 +21,21 @@ import yaml
 from sonar.builders.docker import docker_build, docker_pull, docker_push, docker_tag
 from sonar.template import render
 
+
 LOGLEVEL = os.environ.get("LOGLEVEL", "WARNING").upper()
 logging.basicConfig(level=LOGLEVEL)
 
 
+# pylint: disable=R0902
 @dataclass
 class Context:
+    """
+    Sonar's Execution Context.
+
+    Holds information required for a run, including execution parameters,
+    inventory dictionary, tags (included and excluded).
+    """
+
     inventory: Dict[str, str]
     image: Dict[str, str]
 
@@ -44,11 +55,16 @@ class Context:
     # Generates a version_id to use if one is not present
     stored_version_id: str = str(uuid.uuid4())
 
+    # pylint: disable=C0103
     def I(self, string):
+        """
+        I interpolates variables in string.
+        """
         return interpolate_vars(self, string, stage=self.stage)
 
     @property
     def image_name(self):
+        """Returns current image name"""
         return self.image["name"]
 
     @property
@@ -62,14 +78,21 @@ class Context:
 
 
 def find_inventory(inventory: Optional[str] = None):
+    """
+    Finds the inventory file, and return it as a yaml object.
+    """
     if inventory is None:
         inventory = "inventory.yaml"
 
+    # pylint: disable=C0103
     with open(inventory, "r") as f:
         return yaml.safe_load(f)
 
 
 def find_image(image_name: str, inventory: str):
+    """
+    Looks for an image of the given name in the inventory.
+    """
     for image in find_inventory(inventory)["images"]:
         if image["name"] == image_name:
             return image
@@ -77,21 +100,18 @@ def find_image(image_name: str, inventory: str):
     raise ValueError("Image {} not found".format(image_name))
 
 
-def build_dockerfile(image_from: str, statements: List[str]):
-    dockerfile = "FROM {image_from}\n".format(image_from)
-
-    for stmt in statements:
-        dockerfile += stmt + "\n"
-
-    return dockerfile
-
-
 def find_variables_to_interpolate(string) -> List[str]:
+    """
+    Returns a list of variables in the string that need to be interpolated.
+    """
     var_finder_re = r"\$\(inputs\.params\.(?P<var>\w+)\)"
     return re.findall(var_finder_re, string, re.UNICODE)
 
 
-def find_variable_replacement(ctx: Context, variable, stage=None) -> str:
+def find_variable_replacement(ctx: Context, variable: str, stage=None) -> str:
+    """
+    Returns the variable *value* for this varable.
+    """
     if variable == "version_id":
         return ctx.version_id
 
@@ -126,7 +146,12 @@ def find_variable_replacement(ctx: Context, variable, stage=None) -> str:
     return replacement
 
 
-def find_variable_replacements(ctx, variables, stage=None) -> Dict[str, str]:
+def find_variable_replacements(
+    ctx: Context, variables: List[str], stage=None
+) -> Dict[str, str]:
+    """
+    Finds replacements for a list of variables.
+    """
     replacements = {}
     for variable in variables:
         value = find_variable_replacement(ctx, variable, stage)
@@ -138,7 +163,11 @@ def find_variable_replacements(ctx, variables, stage=None) -> Dict[str, str]:
     return replacements
 
 
-def interpolate_vars(ctx, string, stage=None) -> str:
+def interpolate_vars(ctx: Context, string: str, stage=None) -> str:
+    """
+    For each variable to interpolate in string, finds its *value* and
+    replace it in the final string.
+    """
     variables = find_variables_to_interpolate(string)
     replacements = find_variable_replacements(ctx, variables, stage)
 
@@ -151,6 +180,9 @@ def interpolate_vars(ctx, string, stage=None) -> str:
 
 
 def build_add_statement(ctx, block) -> str:
+    """
+    DEPRECATED: do not use
+    """
     stmt = "ADD "
     if "from" in block:
         stmt += "--from={} ".format(block["from"])
@@ -163,6 +195,9 @@ def build_add_statement(ctx, block) -> str:
 
 
 def find_docker_context(ctx: Context):
+    """
+    Finds a docker context in multiple places in the inventory, image or stage.
+    """
     if ctx.stage is not None:
         if "vars" in ctx.stage and "context" in ctx.stage["vars"]:
             return ctx.stage["vars"]["context"]
@@ -177,7 +212,9 @@ def find_docker_context(ctx: Context):
 
 
 def should_skip_stage(stage: Dict[str, str], skip_tags: List[str]) -> bool:
-    """Checks if this stage should be skipped."""
+    """
+    Checks if this stage should be skipped.
+    """
     stage_tags = stage.get("tags", [])
     if len(stage_tags) == 0:
         return False
@@ -186,8 +223,10 @@ def should_skip_stage(stage: Dict[str, str], skip_tags: List[str]) -> bool:
 
 
 def should_include_stage(stage: Dict[str, str], include_tags: List[str]) -> bool:
-    """Checks if this stage should be included in the run. If tags is empty,
-    then all stages should be run, included this one."""
+    """
+    Checks if this stage should be included in the run. If tags is empty, then
+    all stages should be run, included this one.
+    """
     stage_tags = stage.get("tags", [])
     if len(include_tags) == 0:
         # We don't have "include_tags" so all tasks should run
@@ -203,10 +242,10 @@ def task_dockerfile_create(ctx: Context):
 
     DEPRECATED: Use dockerfile_template or docker_build instead.
     """
-    docker_context = find_docker_context(ctx)
-
     output_dockerfile = ctx.I(ctx.stage["output"][0]["dockerfile"])
     fro = ctx.stage.get("from", "scratch")
+
+    # pylint: disable=C0103
     with open("{}".format(output_dockerfile), "w") as fd:
         fd.write("FROM {}\n".format(fro))
         for f in ctx.stage["static_files"]:
@@ -238,7 +277,11 @@ def task_tag_image(ctx: Context):
         docker_push(registry, tag)
 
 
-def get_rendering_params(ctx: Context):
+def get_rendering_params(ctx: Context) -> Dict[str, str]:
+    """
+    Finds rendering parameters for a template, based on the `inputs` section
+    of the stage.
+    """
     params = {}
     for param in ctx.stage["inputs"]:
         params[param] = find_variable_replacement(ctx, param, ctx.stage)
@@ -246,7 +289,10 @@ def get_rendering_params(ctx: Context):
     return params
 
 
-def run_dockerfile_template(ctx, dockerfile_context, distro):
+def run_dockerfile_template(ctx: Context, dockerfile_context: str, distro: str) -> str:
+    """
+    Renders a template and returns a file name pointing at the render.
+    """
     path = dockerfile_context
     params = get_rendering_params(ctx)
 
@@ -260,8 +306,12 @@ def run_dockerfile_template(ctx, dockerfile_context, distro):
     return tmp.name
 
 
-def interpolate_buildargs(ctx, buildargs):
+def interpolate_buildargs(ctx: Context, buildargs: Dict[str, str]):
+    """
+    Returns a dictionary with build-args with their variables interpolated with values.
+    """
     copied_args = {}
+    # pylint: disable=C0103
     for k, v in buildargs.items():
         copied_args[k] = ctx.I(v)
 
@@ -270,7 +320,7 @@ def interpolate_buildargs(ctx, buildargs):
 
 def create_ecr_repository(tags: List[str]):
     """
-    creates ecr repository if it doesn't exist
+    Creates ecr repository if it doesn't exist
     """
     client = boto3.client("ecr")
 
@@ -278,7 +328,7 @@ def create_ecr_repository(tags: List[str]):
         no_tag = tag.partition(":")[0]
         repository_name = no_tag.partition("/")[2]
 
-        logging.info("Creating {}".format(repository_name))
+        logging.info("Creating %s", repository_name)
 
         try:
             client.create_repository(
@@ -290,8 +340,10 @@ def create_ecr_repository(tags: List[str]):
             pass
 
 
-def echo(ctx, entry_name, message, fg="white"):
-    """Echoes a message"""
+def echo(ctx: Context, entry_name: str, message: str, foreground: str = "white"):
+    """
+    Echoes a message.
+    """
 
     err = ctx.pipeline
     section = ctx.output
@@ -314,11 +366,12 @@ def echo(ctx, entry_name, message, fg="white"):
     if ctx.stage:
         stage_type = ctx.stage["task_type"]
         stage_name = ctx.stage["name"]
-        task_title = "[{}/{}] ".format(stage_name, stage_type)
+        stage_title = "[{}/{}] ".format(stage_name, stage_type)
 
     # If --pipeline, these messages go to stderr
-    click.secho("{}{}: {}".format(
-        stage_title, entry_name, message), fg=fg, err=err)
+    click.secho(
+        "{}{}: {}".format(stage_title, entry_name, message), fg=foreground, err=err
+    )
 
 
 def find_dockerfile(dockerfile: str):
@@ -335,7 +388,9 @@ def find_dockerfile(dockerfile: str):
 
 
 def task_docker_build(ctx: Context):
-    name = ctx.stage["name"]
+    """
+    Builds a container image.
+    """
     docker_context = find_docker_context(ctx)
 
     dockerfile = find_dockerfile(ctx.I(ctx.stage["dockerfile"]))
@@ -375,8 +430,9 @@ def save_dockerfile(dockerfile: str, destination: str):
 
 
 def task_dockerfile_template(ctx: Context):
-    name = ctx.stage["name"]
-
+    """
+    Templates a dockerfile.
+    """
     docker_context = find_docker_context(ctx)
     template_context = docker_context
 
@@ -421,6 +477,7 @@ def find_include_tags(params: Optional[Dict[str, str]] = None) -> List[str]:
     return tags
 
 
+# pylint: disable=R0913, disable=R1710
 def process_image(
     image_name: str,
     skip_tags: Union[str, List[str]],
@@ -429,24 +486,26 @@ def process_image(
     build_args: Optional[Dict[str, str]] = None,
     inventory: Optional[str] = None,
 ):
+    """
+    Runs the Sonar process over an image, for an inventory and a set of configurations.
+    """
     if build_args is None:
         build_args = {}
 
-    ctx = build_context(image_name, skip_tags,
-                        include_tags, build_args, inventory)
+    ctx = build_context(image_name, skip_tags, include_tags, build_args, inventory)
     ctx.pipeline = pipeline
 
-    echo(ctx, "image_build_start", image_name, fg="yellow")
+    echo(ctx, "image_build_start", image_name, foreground="yellow")
 
     for idx, stage in enumerate(ctx.image.get("stages", [])):
         ctx.stage = stage
         name = ctx.stage["name"]
         if should_skip_stage(stage, ctx.skip_tags):
-            echo(ctx, "skipping-stage", name, fg="green")
+            echo(ctx, "skipping-stage", name, foreground="green")
             continue
 
         if not should_include_stage(stage, ctx.include_tags):
-            echo(ctx, "skipping-stage", name, fg="green")
+            echo(ctx, "skipping-stage", name, foreground="green")
             continue
 
         echo(
@@ -473,6 +532,9 @@ def process_image(
 
 
 def make_list_of_str(value: Union[None, str, List[str]]) -> List[str]:
+    """
+    Returns a list of strings from multiple different types.
+    """
     if value is None:
         return []
 
@@ -497,7 +559,7 @@ def build_context(
     image = find_image(image_name, inventory)
 
     build_args = build_args.copy()
-    logging.debug("Should skip tags {}".format(skip_tags))
+    logging.debug("Should skip tags %s", skip_tags)
 
     return Context(
         inventory=find_inventory(inventory),
