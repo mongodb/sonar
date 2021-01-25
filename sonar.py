@@ -47,8 +47,14 @@ def main():
 
     build_args = convert_parser_arguments_to_key_value(args.parameters)
 
-    process_image(args.image, args.skip_tags, args.include_tags,
-                  args.pipeline, build_args, args.inventory)
+    process_image(
+        args.image,
+        args.skip_tags,
+        args.include_tags,
+        args.pipeline,
+        build_args,
+        args.inventory,
+    )
 
 
 if __name__ == "__main__":

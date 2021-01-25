@@ -82,11 +82,7 @@ def test_should_skip_stage():
 @patch("sonar.sonar.docker_build")
 @patch("sonar.sonar.create_ecr_repository")
 def test_include_tags_tag0(
-    _create_ecr_repository,
-    _docker_build,
-    _docker_tag,
-    _docker_push,
-    ys3,
+    _create_ecr_repository, _docker_build, _docker_tag, _docker_push, ys3,
 ):
     """Only includes the stage with the corresponding tag."""
 

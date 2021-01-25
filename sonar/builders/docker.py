@@ -1,6 +1,7 @@
 from typing import List, Dict, Optional
 import logging
 import random
+import os
 
 import docker
 from . import (
@@ -8,16 +9,17 @@ from . import (
     SonarBuildError,
     SonarAPIError,
 )
+import subprocess
+from subprocess import CalledProcessError
+from sonar import DCT_ENV_VARIABLE
 
 
 def docker_client() -> docker.DockerClient:
-    return docker.client.from_env(timeout=60*60*24)
+    return docker.client.from_env(timeout=60 * 60 * 24)
 
 
 def docker_build(
-    path: str,
-    dockerfile: str,
-    buildargs: Optional[Dict[str, str]] = None,
+    path: str, dockerfile: str, buildargs: Optional[Dict[str, str]] = None,
 ):
     """Builds a docker image."""
     client = docker_client()
@@ -50,8 +52,7 @@ def docker_build(
 
 
 def docker_pull(
-    image: str,
-    tag: str,
+    image: str, tag: str,
 ):
     client = docker_client()
 
@@ -62,9 +63,7 @@ def docker_pull(
 
 
 def docker_tag(
-    image: docker.models.images.Image,
-    registry: str,
-    tag: str,
+    image: docker.models.images.Image, registry: str, tag: str,
 ):
     try:
         return image.tag(registry, tag)
@@ -73,14 +72,13 @@ def docker_tag(
 
 
 def docker_push(registry: str, tag: str):
-    client = docker_client()
-
-    try:
-        resp = client.images.push(registry, tag=tag, stream=True, decode=True)
-
-        for res in resp:
-            if "error" in res:
-                raise SonarAPIError(res["error"])
-
-    except docker.errors.APIError as e:
-        raise SonarAPIError from e
+    # We can't use docker-py here
+    # as it doesn't support DOCKER_CONTENT_TRUST
+    # env variable, which could be needed
+    cp = subprocess.run(
+        ["docker", "push", f"{registry}:{tag}"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if cp.returncode != 0:
+        raise SonarAPIError(cp.stderr)

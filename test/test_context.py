@@ -15,10 +15,7 @@ def ys0():
 def cs0(ys0):
     with patch("builtins.open", mock_open(read_data=ys0)) as mock_file:
         ctx = build_context(
-            image_name="image0",
-            skip_tags=[],
-            include_tags=[],
-            build_args={},
+            image_name="image0", skip_tags=[], include_tags=[], build_args={},
         )
         ctx.stage = ctx.image["stages"][0]
 
@@ -35,10 +32,7 @@ def ys1():
 def cs1(ys1):
     with patch("builtins.open", mock_open(read_data=ys1)) as mock_file:
         ctx = build_context(
-            image_name="image0",
-            skip_tags=[],
-            include_tags=[],
-            build_args={},
+            image_name="image0", skip_tags=[], include_tags=[], build_args={},
         )
         ctx.stage = ctx.image["stages"][0]
 

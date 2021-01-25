@@ -7,10 +7,15 @@ Implements Sonar's main functionality.
 import logging
 import os
 import re
+import subprocess
+import base64
+import sys
+import json
 import tempfile
 from urllib.request import urlretrieve
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from shutil import copyfile
 from typing import Dict, List, Optional, Union, Tuple
 
@@ -18,9 +23,17 @@ import boto3
 import click
 import yaml
 
-from sonar.builders.docker import docker_build, docker_pull, docker_push, docker_tag
-from sonar.template import render
+from botocore.exceptions import ClientError
 
+from sonar.builders.docker import (
+    docker_build,
+    docker_pull,
+    docker_push,
+    docker_tag,
+    SonarAPIError,
+)
+from sonar.template import render
+from . import DCT_ENV_VARIABLE, DCT_PASSPHRASE
 
 LOGLEVEL = os.environ.get("LOGLEVEL", "WARNING").upper()
 logging.basicConfig(level=LOGLEVEL)
@@ -254,6 +267,33 @@ def task_dockerfile_create(ctx: Context):
     echo(ctx, "dockerfile-save-location", output_dockerfile)
 
 
+def get_secret(secret_name: str, region: str) -> str:
+    session = boto3.session.Session()
+    client = session.client(service_name="secretsmanager", region_name=region)
+
+    get_secret_value_response = client.get_secret_value(SecretId=secret_name)
+
+    return get_secret_value_response.get("SecretString", "")
+
+
+def get_private_key_id(registry: str, signer_name: str) -> str:
+    cp = subprocess.run(
+        ["docker", "trust", "inspect", registry],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+    if cp.returncode != 0:
+        return SonarAPIError(cp.stderr)
+
+    json_data = json.loads(cp.stdout)
+    assert len(json_data) != 0
+    for signer in json_data[0]["Signers"]:
+        if signer_name == signer["Name"]:
+            assert len(signer["Keys"]) != 0
+            return signer["Keys"][0]["ID"] + ".key"
+
+
 def task_tag_image(ctx: Context):
     """
     Pulls an image from source and pushes into destination.
@@ -267,9 +307,7 @@ def task_tag_image(ctx: Context):
         registry = ctx.I(output["registry"])
         tag = ctx.I(output["tag"])
         echo(
-            ctx,
-            "docker-image-push",
-            "{}:{}".format(registry, tag),
+            ctx, "docker-image-push", "{}:{}".format(registry, tag),
         )
 
         docker_tag(image, registry, tag)
@@ -369,6 +407,7 @@ def echo(ctx: Context, entry_name: str, message: str, foreground: str = "white")
         stage_title = "[{}/{}] ".format(stage_name, stage_type)
 
     # If --pipeline, these messages go to stderr
+
     click.secho(
         "{}{}: {}".format(stage_title, entry_name, message), fg=foreground, err=err
     )
@@ -387,6 +426,39 @@ def find_dockerfile(dockerfile: str):
     return dockerfile
 
 
+def is_signing_enabled(output: Dict) -> bool:
+    return all(
+        key in output
+        for key in (
+            "signer_name",
+            "key_secret_name",
+            "passphrase_secret_name",
+            "region",
+        )
+    )
+
+
+def setup_signing_environment(ctx: Context, output: Dict) -> str:
+    os.environ[DCT_ENV_VARIABLE] = "1"
+    os.environ[DCT_PASSPHRASE] = get_secret(
+        ctx.I(output["passphrase_secret_name"]), ctx.I(output["region"])
+    )
+    # Asks docker trust inspect for the name the private key for the specified signer
+    # has to have
+    signing_key_name = get_private_key_id(
+        ctx.I(output["registry"]), ctx.I(output["signer_name"])
+    )
+
+    # And writes the private key stored in the secret to the appropriate path
+    private_key = get_secret(ctx.I(output["key_secret_name"]), ctx.I(output["region"]))
+    docker_trust_path = f"{Path.home()}/.docker/trust/private"
+    Path(docker_trust_path).mkdir(parents=True, exist_ok=True)
+    with open(f"{docker_trust_path}/{signing_key_name}", "w+") as f:
+        f.write(private_key)
+
+    return signing_key_name
+
+
 def task_docker_build(ctx: Context):
     """
     Builds a container image.
@@ -402,11 +474,18 @@ def task_docker_build(ctx: Context):
     for output in ctx.stage["output"]:
         registry = ctx.I(output["registry"])
         tag = ctx.I(output["tag"])
+        sign = is_signing_enabled(output)
+        signing_key_name = ""
+        if sign:
+            signing_key_name = setup_signing_environment(ctx, output)
 
         echo(ctx, "docker-image-push", "{}:{}".format(registry, tag))
         docker_tag(image, registry, tag)
+
         create_ecr_repository([registry])
         docker_push(registry, tag)
+        if sign:
+            clear_signing_environment(signing_key_name)
 
 
 def split_s3_location(s3loc: str) -> Tuple[str, str]:
@@ -475,6 +554,13 @@ def find_include_tags(params: Optional[Dict[str, str]] = None) -> List[str]:
         tags = [t.strip() for t in tags.split(",") if t != ""]
 
     return tags
+
+
+def clear_signing_environment(key_to_remove: str):
+    # Note that this is not strictly needed
+    os.unsetenv(DCT_ENV_VARIABLE)
+    os.unsetenv(DCT_PASSPHRASE)
+    os.remove(f"{Path.home()}/.docker/trust/private/{key_to_remove}")
 
 
 # pylint: disable=R0913, disable=R1710
