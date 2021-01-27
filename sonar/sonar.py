@@ -307,11 +307,13 @@ def task_tag_image(ctx: Context):
         registry = ctx.I(output["registry"])
         tag = ctx.I(output["tag"])
         echo(
-            ctx, "docker-image-push", "{}:{}".format(registry, tag),
+            ctx,
+            "docker-image-push",
+            "{}:{}".format(registry, tag),
         )
 
         docker_tag(image, registry, tag)
-        create_ecr_repository([registry])
+        create_ecr_repository(registry)
         docker_push(registry, tag)
 
 
@@ -331,11 +333,12 @@ def run_dockerfile_template(ctx: Context, dockerfile_context: str, distro: str) 
     """
     Renders a template and returns a file name pointing at the render.
     """
+    logger = logging.getLogger(__name__)
     path = dockerfile_context
     params = get_rendering_params(ctx)
 
-    logging.debug("rendering params are:")
-    logging.debug(params)
+    logger.debug("rendering params are:")
+    logger.debug(params)
 
     rendered = render(path, distro, params)
     tmp = tempfile.NamedTemporaryFile(delete=False)
@@ -356,26 +359,31 @@ def interpolate_buildargs(ctx: Context, buildargs: Dict[str, str]):
     return copied_args
 
 
-def create_ecr_repository(tags: List[str]):
+def create_ecr_repository(tag: str):
     """
     Creates ecr repository if it doesn't exist
     """
-    client = boto3.client("ecr")
-
-    for tag in tags:
+    logger = logging.getLogger(__name__)
+    try:
         no_tag = tag.partition(":")[0]
+        region = no_tag.split(".")[3]
         repository_name = no_tag.partition("/")[2]
+    except IndexError:
+        logger.debug("Not an ECR repository: %s", tag)
+        return
 
-        logging.info("Creating %s", repository_name)
+    logger.debug("Creating repository in %s with name %s", region, repository_name)
 
-        try:
-            client.create_repository(
-                repositoryName=repository_name,
-                imageTagMutability="IMMUTABLE",
-                imageScanningConfiguration={"scanOnPush": False},
-            )
-        except client.exceptions.RepositoryAlreadyExistsException:
-            pass
+    client = boto3.client("ecr", region_name=region)
+
+    try:
+        client.create_repository(
+            repositoryName=repository_name,
+            imageTagMutability="MUTABLE",
+            imageScanningConfiguration={"scanOnPush": False},
+        )
+    except client.exceptions.RepositoryAlreadyExistsException:
+        logger.debug("Repository already exists")
 
 
 def echo(ctx: Context, entry_name: str, message: str, foreground: str = "white"):
@@ -482,7 +490,7 @@ def task_docker_build(ctx: Context):
         echo(ctx, "docker-image-push", "{}:{}".format(registry, tag))
         docker_tag(image, registry, tag)
 
-        create_ecr_repository([registry])
+        create_ecr_repository(registry)
         docker_push(registry, tag)
         if sign:
             clear_signing_environment(signing_key_name)
@@ -642,10 +650,13 @@ def build_context(
 ) -> Context:
     """A Context includes the whole inventory, the image to build, the current stage,
     and the `I` interpolation function."""
+    logger = logging.getLogger(__name__)
     image = find_image(image_name, inventory)
 
+    if build_args is None:
+        build_args = dict()
     build_args = build_args.copy()
-    logging.debug("Should skip tags %s", skip_tags)
+    logger.debug("Should skip tags %s", skip_tags)
 
     return Context(
         inventory=find_inventory(inventory),

@@ -50,7 +50,7 @@ def test_tag_image(
     patched_docker_push.assert_has_calls(push_calls)
 
     create_ecr_calls = [
-        call(["dest-registry-0-test_value0"]),
-        call(["dest-registry-1-test_value0"]),
+        call("dest-registry-0-test_value0"),
+        call("dest-registry-1-test_value0"),
     ]
     patched_create_ecr_repository.assert_has_calls(create_ecr_calls)
