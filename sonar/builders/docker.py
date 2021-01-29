@@ -19,7 +19,9 @@ def docker_client() -> docker.DockerClient:
 
 
 def docker_build(
-    path: str, dockerfile: str, buildargs: Optional[Dict[str, str]] = None,
+    path: str,
+    dockerfile: str,
+    buildargs: Optional[Dict[str, str]] = None,
 ):
     """Builds a docker image."""
     client = docker_client()
@@ -54,7 +56,8 @@ def docker_build(
 
 
 def docker_pull(
-    image: str, tag: str,
+    image: str,
+    tag: str,
 ):
     client = docker_client()
 
@@ -65,7 +68,9 @@ def docker_pull(
 
 
 def docker_tag(
-    image: docker.models.images.Image, registry: str, tag: str,
+    image: docker.models.images.Image,
+    registry: str,
+    tag: str,
 ):
     try:
         return image.tag(registry, tag)
