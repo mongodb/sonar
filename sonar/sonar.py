@@ -8,8 +8,6 @@ import logging
 import os
 import re
 import subprocess
-import base64
-import sys
 import json
 import tempfile
 from urllib.request import urlretrieve
@@ -22,8 +20,6 @@ from typing import Dict, List, Optional, Union, Tuple
 import boto3
 import click
 import yaml
-
-from botocore.exceptions import ClientError
 
 from sonar.builders.docker import (
     docker_build,
