@@ -4,31 +4,32 @@ sonar/sonar.py
 Implements Sonar's main functionality.
 """
 
+import json
 import logging
 import os
 import re
 import subprocess
-import json
 import tempfile
-from urllib.request import urlretrieve
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import copyfile
-from typing import Dict, List, Optional, Union, Tuple
+from typing import Dict, List, Optional, Tuple, Union
+from urllib.request import urlretrieve
 
 import boto3
 import click
 import yaml
 
 from sonar.builders.docker import (
+    SonarAPIError,
     docker_build,
     docker_pull,
     docker_push,
     docker_tag,
-    SonarAPIError,
 )
 from sonar.template import render
+
 from . import DCT_ENV_VARIABLE, DCT_PASSPHRASE
 
 LOGLEVEL = os.environ.get("LOGLEVEL", "WARNING").upper()
@@ -355,17 +356,30 @@ def interpolate_buildargs(ctx: Context, buildargs: Dict[str, str]):
     return copied_args
 
 
+def is_valid_ecr_repo(repo_name: str) -> bool:
+    """Returns true if repo_name is a ECR repository, it expectes
+    a domain part (*.amazonaws.com) and a repository part (/images/container-x/...)."""
+    rex = re.compile(
+        r"^[0-9]{10,}\.dkr\.ecr\.[a-z]{2}\-[a-z]+\-[0-9]+\.amazonaws\.com/.+"
+    )
+    return rex.match(repo_name) is not None
+
+
 def create_ecr_repository(tag: str):
     """
     Creates ecr repository if it doesn't exist
     """
     logger = logging.getLogger(__name__)
+    if not is_valid_ecr_repo(tag):
+        logger.info("Not an ECR repository: %s", tag)
+        return
+
     try:
         no_tag = tag.partition(":")[0]
         region = no_tag.split(".")[3]
         repository_name = no_tag.partition("/")[2]
     except IndexError:
-        logger.debug("Not an ECR repository: %s", tag)
+        logger.debug("Could not parse repository: %s", tag)
         return
 
     logger.debug("Creating repository in %s with name %s", region, repository_name)
