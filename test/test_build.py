@@ -25,16 +25,15 @@ def test_dockerfile_from_url(
             pipeline = process_image(
                 image_name="image0",
                 skip_tags=[],
-                include_tags=[],
-                pipeline=True,
+                include_tags=["test_dockerfile_from_url"],
                 build_args={},
             )
 
-    assert patched_urlretrive.called_once()
-    assert patched_docker_build.called_once()
-    assert patched_docker_tag.called_once()
-    assert patched_docker_push.called_once()
-    assert patched_create_ecr_repository.called_once()
+    patched_urlretrive.assert_called_once()
+    patched_docker_build.assert_called_once()
+    patched_docker_tag.assert_called_once()
+    patched_docker_push.assert_called_once()
+    patched_create_ecr_repository.assert_called_once()
 
 
 @patch(

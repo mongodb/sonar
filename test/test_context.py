@@ -271,3 +271,17 @@ def test_use_specific_inventory():
     assert context.include_tags == []
 
     assert context.I("$(inputs.params.input0)") == "my-value"
+
+
+def test_can_provide_generic_configuration():
+    context = build_context(
+        image_name="image0",
+        skip_tags=[],
+        include_tags=[],
+        build_args={},
+        inventory="test/yaml_scenario0.yaml",
+        build_options={"invalid_options": False, "continue_on_errors": False},
+    )
+
+    assert context.continue_on_errors is False
+    assert not hasattr(context, "invalid_options")

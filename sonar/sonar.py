@@ -57,6 +57,20 @@ class Context:
 
     stage: Dict[str, str] = None
 
+    # If continue_on_errors is set to true, errors will
+    # be captured and logged, but will not raise, and will
+    # not stop future tasks to be executed.
+    continue_on_errors: bool = True
+
+    # If errors happened during the execution an exception
+    # will be raised. This can help on situations were some
+    # errors were captured (continue_on_errors == True) but
+    # we still want to fail the overall task.
+    fail_on_errors: bool = False
+
+    # List of captured errors to report.
+    captured_errors: List[Exception] = field(default_factory=list)
+
     # Defines if running in pipeline mode, this is, the output
     # is supposed to be consumable by the system calling sonar.
     pipeline: bool = False
@@ -311,7 +325,14 @@ def task_tag_image(ctx: Context):
 
         docker_tag(image, registry, tag)
         create_ecr_repository(registry)
-        docker_push(registry, tag)
+        try:
+            docker_push(registry, tag)
+        except SonarAPIError as e:
+            ctx.captured_errors.append(e)
+            if ctx.continue_on_errors:
+                echo(ctx, "docker-image-push/error", e)
+            else:
+                raise
 
 
 def get_rendering_params(ctx: Context) -> Dict[str, str]:
@@ -501,7 +522,15 @@ def task_docker_build(ctx: Context):
         docker_tag(image, registry, tag)
 
         create_ecr_repository(registry)
-        docker_push(registry, tag)
+        try:
+            docker_push(registry, tag)
+        except SonarAPIError as e:
+            ctx.captured_errors.append(e)
+            if ctx.continue_on_errors:
+                echo(ctx, "docker-image-push/error", e)
+            else:
+                raise
+
         if sign:
             clear_signing_environment(signing_key_name)
 
@@ -586,9 +615,9 @@ def process_image(
     image_name: str,
     skip_tags: Union[str, List[str]],
     include_tags: Union[str, List[str]],
-    pipeline: bool = True,
     build_args: Optional[Dict[str, str]] = None,
     inventory: Optional[str] = None,
+    build_options: Optional[Dict[str, str]] = None,
 ):
     """
     Runs the Sonar process over an image, for an inventory and a set of configurations.
@@ -596,8 +625,9 @@ def process_image(
     if build_args is None:
         build_args = {}
 
-    ctx = build_context(image_name, skip_tags, include_tags, build_args, inventory)
-    ctx.pipeline = pipeline
+    ctx = build_context(
+        image_name, skip_tags, include_tags, build_args, inventory, build_options
+    )
 
     echo(ctx, "image_build_start", image_name, foreground="yellow")
 
@@ -631,6 +661,10 @@ def process_image(
                 "task_type {} not supported".format(stage["task_type"])
             )
 
+    if len(ctx.captured_errors) > 0 and ctx.fail_on_errors:
+        echo(ctx, "docker-image-push/captured-errors", ctx.captured_errors)
+        raise SonarAPIError(ctx.captured_errors[0])
+
     if ctx.pipeline:
         return ctx.output
 
@@ -657,6 +691,7 @@ def build_context(
     include_tags: Union[str, List[str]],
     build_args: Optional[Dict[str, str]] = None,
     inventory: Optional[str] = None,
+    build_options: Optional[Dict[str, str]] = None,
 ) -> Context:
     """A Context includes the whole inventory, the image to build, the current stage,
     and the `I` interpolation function."""
@@ -668,10 +703,19 @@ def build_context(
     build_args = build_args.copy()
     logger.debug("Should skip tags %s", skip_tags)
 
-    return Context(
+    if build_options is None:
+        build_options = {}
+
+    context = Context(
         inventory=find_inventory(inventory),
         image=image,
         parameters=build_args,
         skip_tags=make_list_of_str(skip_tags),
         include_tags=make_list_of_str(include_tags),
     )
+
+    for k, v in build_options.items():
+        if hasattr(context, k):
+            setattr(context, k, v)
+
+    return context

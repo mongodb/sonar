@@ -48,12 +48,12 @@ def main():
     build_args = convert_parser_arguments_to_key_value(args.parameters)
 
     process_image(
-        args.image,
-        args.skip_tags,
-        args.include_tags,
-        args.pipeline,
-        build_args,
-        args.inventory,
+        image_name=args.image,
+        skip_tags=args.skip_tags,
+        include_tags=args.include_tags,
+        build_args=build_args,
+        inventory=args.inventory,
+        build_options={"pipeline": args.pipeline},
     )
 
 

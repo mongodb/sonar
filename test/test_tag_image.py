@@ -25,7 +25,6 @@ def test_tag_image(
             image_name="image0",
             skip_tags=[],
             include_tags=[],
-            pipeline=True,
             build_args={},
         )
 

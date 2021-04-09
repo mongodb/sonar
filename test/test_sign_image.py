@@ -42,7 +42,6 @@ def test_sign_image(
             image_name="image0",
             skip_tags=[],
             include_tags=[],
-            pipeline=True,
             build_args={},
         )
 
@@ -132,7 +131,6 @@ def test_sign_image(
             image_name="image0",
             skip_tags=[],
             include_tags=[],
-            pipeline=True,
             build_args={},
         )
 

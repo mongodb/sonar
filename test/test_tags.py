@@ -95,8 +95,8 @@ def test_include_tags_tag0(
             image_name="image0",
             skip_tags=[],
             include_tags=["tag0"],
-            pipeline=True,
             build_args={},
+            build_options={"pipeline": True},
         )
 
     assert "skipping-stage" not in pipeline["image0"]["stage0"]
@@ -116,8 +116,8 @@ def test_include_tags_tag0_tag1(
             image_name="image0",
             skip_tags=[],
             include_tags=["tag0", "tag1"],
-            pipeline=True,
             build_args={},
+            build_options={"pipeline": True},
         )
 
     assert "skipping-stage" not in pipeline["image0"]["stage0"]
@@ -137,8 +137,8 @@ def test_skip_tags1(
             image_name="image0",
             skip_tags=["tag0"],
             include_tags=[],
-            pipeline=True,
             build_args={},
+            build_options={"pipeline": True},
         )
 
     assert pipeline["image0"]["stage0"] == {"skipping-stage": "stage0"}
@@ -152,8 +152,8 @@ def test_skip_tags2(ys3):
             image_name="image0",
             skip_tags=["tag0", "tag1"],
             include_tags=[],
-            pipeline=True,
             build_args={},
+            build_options={"pipeline": True},
         )
 
     assert pipeline["image0"]["stage0"] == {"skipping-stage": "stage0"}
@@ -174,8 +174,8 @@ def test_skip_include_tags(
             image_name="image0",
             skip_tags=["tag0"],
             include_tags=["tag1"],
-            pipeline=True,
             build_args={},
+            build_options={"pipeline": True},
         )
 
     assert pipeline["image0"]["stage0"] == {"skipping-stage": "stage0"}
