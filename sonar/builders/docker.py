@@ -7,11 +7,9 @@ import docker
 from . import (
     buildarg_from_dict,
     SonarBuildError,
-    SonarAPIError,
+    SonarAPIError, labels_from_dict,
 )
 import subprocess
-from subprocess import CalledProcessError
-from sonar import DCT_ENV_VARIABLE
 
 
 def docker_client() -> docker.DockerClient:
@@ -22,6 +20,7 @@ def docker_build(
     path: str,
     dockerfile: str,
     buildargs: Optional[Dict[str, str]] = None,
+    labels: Optional[Dict[str, str]] = None,
 ):
     """Builds a docker image."""
     client = docker_client()
@@ -34,18 +33,20 @@ def docker_build(
     logger.info("dockerfile: {}".format(dockerfile))
     logger.info("tag: {}".format(image_name))
     logger.info("buildargs: {}".format(buildargs))
+    logger.info("labels: {}".format(labels))
 
     buildargs_str = buildarg_from_dict(buildargs)
+    labels_str = labels_from_dict(labels)
 
     logger.info(
-        "docker build {context} -f {dockerfile} {buildargs}".format(
-            context=path, dockerfile=dockerfile, buildargs=buildargs_str
+        "docker build {context} -f {dockerfile} {buildargs} {labels}".format(
+            context=path, dockerfile=dockerfile, buildargs=buildargs_str, labels=labels_str,
         )
     )
 
     try:
         image, _ = client.images.build(
-            path=path, dockerfile=dockerfile, tag=image_name, buildargs=buildargs
+            path=path, dockerfile=dockerfile, tag=image_name, buildargs=buildargs, labels=labels,
         )
         return image
     except (docker.errors.BuildError) as e:

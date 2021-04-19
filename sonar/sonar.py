@@ -365,17 +365,16 @@ def run_dockerfile_template(ctx: Context, dockerfile_context: str, distro: str) 
     return tmp.name
 
 
-def interpolate_buildargs(ctx: Context, buildargs: Dict[str, str]):
+def interpolate_dict(ctx: Context, args: Dict[str, str]) -> Dict[str,str]:
     """
-    Returns a dictionary with build-args with their variables interpolated with values.
+    Returns a copy of the provided dictionary with their variables interpolated with values.
     """
     copied_args = {}
     # pylint: disable=C0103
-    for k, v in buildargs.items():
+    for k, v in args.items():
         copied_args[k] = ctx.I(v)
 
     return copied_args
-
 
 def is_valid_ecr_repo(repo_name: str) -> bool:
     """Returns true if repo_name is a ECR repository, it expectes
@@ -506,9 +505,11 @@ def task_docker_build(ctx: Context):
 
     dockerfile = find_dockerfile(ctx.I(ctx.stage["dockerfile"]))
 
-    buildargs = interpolate_buildargs(ctx, ctx.stage.get("buildargs", {}))
+    buildargs = interpolate_dict(ctx, ctx.stage.get("buildargs", {}))
 
-    image = docker_build(docker_context, dockerfile, buildargs)
+    labels = interpolate_dict(ctx, ctx.stage.get("labels", {}))
+
+    image = docker_build(docker_context, dockerfile, buildargs=buildargs, labels=labels)
 
     for output in ctx.stage["output"]:
         registry = ctx.I(output["registry"])
