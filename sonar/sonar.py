@@ -341,7 +341,7 @@ def get_rendering_params(ctx: Context) -> Dict[str, str]:
     of the stage.
     """
     params = {}
-    for param in ctx.stage["inputs"]:
+    for param in ctx.stage.get("inputs", {}):
         params[param] = find_variable_replacement(ctx, param, ctx.stage)
 
     return params
