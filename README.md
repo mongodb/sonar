@@ -63,26 +63,35 @@ To execute this inventory file, you can do:
 ```
 $ python sonar.py --image sonar-test-runner
 
-image_build_start: sonar-test-runner
-Stage started build-sonar-tester-image: 1/1
-docker-image-push: localhost:5000/sonar-tester-image:799170de-74a0-4310-a674-d704b83f2ed2
+[build-sonar-tester-image/docker_build] stage-started build-sonar-tester-image: 1/2
+[build-sonar-tester-image/docker_build] docker-image-push: localhost:5000/sonar-tester-image:8945563b-248e-4c03-bb0a-6cc15cff1a6e
+[tag-image/tag_image] stage-started tag-image: 2/2
+[tag-image/tag_image] docker-image-push: localhost:5000/sonar-tester-image-copy:8945563b-248e-4c03-bb0a-6cc15cff1a6e
 ```
 
-At the end of this phase, you'll have a Docker image tagged as `localhost:5000/sonar-tester-image:799170de-74a0-4310-a674-d704b83f2ed2`
-that you will be able to run with:
+At the end of this phase, you'll have a Docker image tagged as
+`localhost:5000/sonar-tester-image:8945563b-248e-4c03-bb0a-6cc15cff1a6e` that
+you will be able to run with:
 
 ```
 $ docker run localhost:5000/sonar-tester-image:799170de-74a0-4310-a674-d704b83f2ed2
 ============================= test session starts ==============================
-platform linux -- Python 3.7.9, pytest-6.1.2, py-1.9.0, pluggy-0.13.1
+platform linux -- Python 3.9.4, pytest-6.2.4, py-1.10.0, pluggy-0.13.1
 rootdir: /src
-collected 20 items
+collected 38 items
 
-test/test_context.py ......x                                             [ 35%]
-test/test_sonar.py .                                                     [ 40%]
-test/test_tag_image.py .                                                 [ 45%]
-test/test_tags.py ...........                                            [100%]
+test/test_build.py ...                                                   [  7%]
+test/test_context.py ......x.....                                        [ 39%]
+test/test_sign_image.py ..                                               [ 44%]
+test/test_sonar.py ........                                              [ 65%]
+test/test_tag_image.py .                                                 [ 68%]
+test/test_tags.py ...........                                            [ 97%]
+test/test_template.py .                                                  [100%]
 
-======================== 19 passed, 1 xfailed in 0.50s =========================
+======================== 37 passed, 1 xfailed in 0.52s =========================
 ```
 
+
+## Legal
+
+Sonar is released under the terms of the [Apache2 license](./APACHE2).
