@@ -93,4 +93,4 @@ test/test_template.py .                                                  [100%]
 
 ## Legal
 
-Sonar is released under the terms of the [Apache2 license](./APACHE2).
+Sonar is released under the terms of the [Apache2 license](./LICENSE).
