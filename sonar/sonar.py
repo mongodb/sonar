@@ -11,10 +11,11 @@ import re
 import subprocess
 import tempfile
 import uuid
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from shutil import copyfile
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union, Any
 from urllib.request import urlretrieve
 
 import boto3
@@ -79,6 +80,12 @@ class Context:
     # Generates a version_id to use if one is not present
     stored_version_id: str = str(uuid.uuid4())
 
+    # stage_outputs is a dictionary of dictionaries. First dict
+    # has a key corresponding to the name of the stage, the dict
+    # you get from it is key/value (str, Any) with the values
+    # stored by given stage.
+    stage_outputs: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
+
     # pylint: disable=C0103
     def I(self, string):
         """
@@ -99,6 +106,16 @@ class Context:
         a uuid is used as a way of having independent builds.
         """
         return os.environ.get("version_id", self.stored_version_id)
+
+
+def append_output_in_context(ctx: Context, stage_name: str, values: Dict) -> None:
+    """Stores a value as the output of the stage, so it can be consumed by future stages."""
+    if stage_name not in ctx.stage_outputs.keys():
+        # adds a new empty dictionary to this stage
+        # if there isn't one yet.
+        ctx.stage_outputs[stage_name] = list()
+
+    ctx.stage_outputs[stage_name].append(values)
 
 
 def find_inventory(inventory: Optional[str] = None):
@@ -122,14 +139,6 @@ def find_image(image_name: str, inventory: str):
             return image
 
     raise ValueError("Image {} not found".format(image_name))
-
-
-def find_variables_to_interpolate(string) -> List[str]:
-    """
-    Returns a list of variables in the string that need to be interpolated.
-    """
-    var_finder_re = r"\$\(inputs\.params\.(?P<var>\w+)\)"
-    return re.findall(var_finder_re, string, re.UNICODE)
 
 
 def find_variable_replacement(ctx: Context, variable: str, stage=None) -> str:
@@ -187,6 +196,38 @@ def find_variable_replacements(
     return replacements
 
 
+def execute_interpolatable_function(name: str) -> str:
+    if name == "tempfile":
+        tmp = tempfile.mkstemp()
+        # mkstemp returns a tuple, with the second element of it being
+        # the absolute path to the file.
+        return tmp[1]
+
+    raise ValueError("Only supported function is 'tempfile'")
+
+
+def find_variables_to_interpolate_from_stage(string: str) -> List[Any]:
+    """Finds a $(stage['stage-name'].outputs[])"""
+    var_finder_re = r"\$\(stages\[\'(?P<stage_name>[\w-]+)\'\]\.outputs\[(?P<index>\d+)\]\.(?P<key>\w+)"
+
+    return re.findall(var_finder_re, string, re.UNICODE)
+
+
+def find_variables_to_interpolate(string) -> List[str]:
+    """
+    Returns a list of variables in the string that need to be interpolated.
+    """
+    var_finder_re = r"\$\(inputs\.params\.(?P<var>\w+)\)"
+    return re.findall(var_finder_re, string, re.UNICODE)
+
+
+def find_functions_to_interpolate(string: str) -> List[Any]:
+    """Find functions to be interpolated."""
+    var_finder_re = r"\$\(functions\.(?P<var>\w+)\)"
+
+    return re.findall(var_finder_re, string, re.UNICODE)
+
+
 def interpolate_vars(ctx: Context, string: str, stage=None) -> str:
     """
     For each variable to interpolate in string, finds its *value* and
@@ -200,8 +241,23 @@ def interpolate_vars(ctx: Context, string: str, stage=None) -> str:
             "$(inputs.params.{})".format(variable), replacements[variable]
         )
 
-    return string
+    variables = find_variables_to_interpolate_from_stage(string)
+    for stage, index, key in variables:
+        value = ctx.stage_outputs[stage][int(index)][key]
+        string = string.replace(
+            "$(stages['{}'].outputs[{}].{})".format(stage, index, key),
+            value
+        )
 
+    functions = find_functions_to_interpolate(string)
+    for name in functions:
+        value = execute_interpolatable_function(name)
+        string = string.replace(
+            "$(functions.{})".format(name),
+            value
+        )
+
+    return string
 
 def build_add_statement(ctx, block) -> str:
     """
@@ -333,6 +389,11 @@ def task_tag_image(ctx: Context):
                 echo(ctx, "docker-image-push/error", e)
             else:
                 raise
+
+        append_output_in_context(ctx, ctx.stage["name"], {
+            "registry": registry,
+            "tag": tag
+        })
 
 
 def get_rendering_params(ctx: Context) -> Dict[str, str]:
@@ -532,6 +593,11 @@ def task_docker_build(ctx: Context):
             else:
                 raise
 
+        append_output_in_context(ctx, ctx.stage["name"], {
+            "registry": registry,
+            "tag": tag,
+        })
+
         if sign:
             clear_signing_environment(signing_key_name)
 
@@ -568,7 +634,13 @@ def task_dockerfile_template(ctx: Context):
     except KeyError:
         pass
 
-    dockerfile = run_dockerfile_template(ctx, template_context, ctx.stage.get("distro"))
+
+    template_file_extension = ctx.stage.get("template_file_extension")
+    if template_file_extension is None:
+        # Use distro as compatibility with pre 0.11
+        template_file_extension = ctx.stage.get("distro")
+
+    dockerfile = run_dockerfile_template(ctx, template_context, template_file_extension)
 
     for output in ctx.stage["output"]:
         if "dockerfile" in output:
@@ -576,6 +648,10 @@ def task_dockerfile_template(ctx: Context):
             save_dockerfile(dockerfile, output_dockerfile)
 
             echo(ctx, "dockerfile-save-location", output_dockerfile)
+
+            append_output_in_context(ctx, ctx.stage["name"], {
+                "dockerfile": output_dockerfile
+            })
 
 
 def find_skip_tags(params: Optional[Dict[str, str]] = None) -> List[str]:

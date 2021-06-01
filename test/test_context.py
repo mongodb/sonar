@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import patch, mock_open
 
-from sonar.sonar import build_context, find_skip_tags, should_skip_stage
+from sonar.sonar import Context, build_context, find_skip_tags, should_skip_stage, append_output_in_context
 
 # yaml_scenario0
 @pytest.fixture()
@@ -220,6 +220,7 @@ def test_variable_interpolation_stage_parameters_funny(ys1):
 @patch("sonar.sonar.find_image", return_value={})
 def test_build_context_skip_tags_from_str(_patched_find_image):
     ctx = build_context(
+        inventory="inventories/simple.yaml",
         image_name="image-name",
         skip_tags="skip0,skip1",
         include_tags="included0, included1",
@@ -233,7 +234,11 @@ def test_build_context_skip_tags_from_str(_patched_find_image):
 @patch("sonar.sonar.find_image", return_value={})
 def test_build_context_skip_tags_from_empty_str(_patched_find_image):
     ctx = build_context(
-        image_name="image-name", skip_tags="", include_tags="", build_args={}
+        inventory="inventories/simple.yaml",
+        image_name="image-name",
+        skip_tags="",
+        include_tags="",
+        build_args={}
     )
 
     assert ctx.skip_tags == []
@@ -285,3 +290,83 @@ def test_can_provide_generic_configuration():
 
     assert context.continue_on_errors is False
     assert not hasattr(context, "invalid_options")
+
+
+def test_can_store_in_context():
+    ctx = Context(
+        inventory={},
+        image="some-image",
+        parameters=[],
+    )
+
+
+    append_output_in_context(ctx, "stage0", {
+        "key0": "value0",
+        "key1": "value1",
+        "key2": "value2"
+    })
+
+    append_output_in_context(ctx, "stage0", {
+        "key0": "value0",
+        "key1": "value1",
+        "key2": "value2",
+        "key3": "value3"
+    })
+
+    assert len(ctx.stage_outputs["stage0"]) == 2
+    assert len(ctx.stage_outputs["stage0"][0]) == 3
+    assert len(ctx.stage_outputs["stage0"][1]) == 4
+
+
+    assert ctx.stage_outputs["stage0"][0] == {
+        "key0": "value0",
+        "key1": "value1",
+        "key2": "value2"
+    }
+
+    assert ctx.stage_outputs["stage0"][1] == {
+        "key0": "value0",
+        "key1": "value1",
+        "key2": "value2",
+        "key3": "value3"
+    }
+
+    append_output_in_context(ctx, "stage1", {
+        "key0": "value0",
+        "key1": "value1",
+        "key2": "value2",
+        "key3": "value3"
+    })
+
+    assert len(ctx.stage_outputs) == 2
+    assert len(ctx.stage_outputs["stage1"][0]) == 4
+
+    assert ctx.stage_outputs["stage1"][0] == {
+        "key0": "value0",
+        "key1": "value1",
+        "key2": "value2",
+        "key3": "value3"
+    }
+
+    assert ctx.I("$(stages['stage0'].outputs[0].key0)") == "value0"
+    assert ctx.I("$(stages['stage0'].outputs[1].key3)") == "value3"
+
+def test_stages_output_and_variables(cs2: Context):
+    ctx = cs2
+    append_output_in_context(ctx, "stage0", {
+        "key0": "value0",
+        "key1": "value1",
+        "key2": "value2"
+    })
+
+    append_output_in_context(ctx, "stage0", {
+        "key0": "value0",
+        "key1": "value1",
+        "key2": "value2",
+        "key3": "value3"
+    })
+
+    assert (ctx.I("$(inputs.params.inventory_var0) -- $(stages['stage0'].outputs[0].key2)") ==
+            "inventory_var_value0 -- value2")
+
+    assert ctx.I("$(inputs.params.image_input0) -- $(stages['stage0'].outputs[1].key3)") == "🐳 -- value3"

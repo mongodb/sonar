@@ -1,0 +1,5 @@
+{% extends "Dockerfile.template" %}
+
+{% set from_base = "python:3.10-rc-slim" %}
+
+# Sets the base version as 3.10 release candidate to try Sonar on latest Python!

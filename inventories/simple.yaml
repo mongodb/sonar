@@ -27,9 +27,9 @@ images:
     task_type: tag_image
 
     source:
-      registry: $(inputs.params.registry)/sonar-tester-image
-      tag: $(inputs.params.version_id)
+      registry: $(stages['build-sonar-tester-image'].outputs[0].registry)
+      tag: $(stages['build-sonar-tester-image'].outputs[0].tag)
 
     destination:
-    - registry: $(inputs.params.registry)/sonar-tester-image-copy
-      tag: $(inputs.params.version_id)
+    - registry: $(inputs.params.registry)/sonar-tester-image
+      tag: latest
