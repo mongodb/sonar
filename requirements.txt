@@ -4,3 +4,4 @@ docker==5.0.0
 Jinja2==3.0.1
 pytest==6.2.4
 pyyaml==5.4.1
+pytest-cov==2.12.1
