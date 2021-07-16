@@ -50,10 +50,20 @@ def docker_build(
         )
         return image
     except (docker.errors.BuildError) as e:
-        raise SonarBuildError from e
+        raise SonarBuildError(_get_build_log(e)) from e
 
     except (docker.errors.APIError) as e:
         raise SonarAPIError from e
+
+
+def _get_build_log(e: docker.errors.BuildError) -> str:
+    build_logs = "\n"
+    for item in e.build_log:
+        if "stream" not in item:
+            continue
+        item_str = item["stream"]
+        build_logs += item_str
+    return build_logs
 
 
 def docker_pull(
