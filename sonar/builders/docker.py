@@ -53,7 +53,7 @@ def docker_build(
         raise SonarBuildError(_get_build_log(e)) from e
 
     except (docker.errors.APIError) as e:
-        raise SonarBuildError from e
+        raise SonarAPIError from e
 
 
 def _get_build_log(e: docker.errors.BuildError) -> str:
