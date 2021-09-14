@@ -1,15 +1,11 @@
-from typing import List, Dict, Optional
 import logging
 import random
-import os
+import subprocess
+from typing import Dict, Optional
 
 import docker
-from . import (
-    buildarg_from_dict,
-    SonarBuildError,
-    SonarAPIError, labels_from_dict,
-)
-import subprocess
+
+from . import SonarAPIError, SonarBuildError, buildarg_from_dict, labels_from_dict
 
 
 def docker_client() -> docker.DockerClient:
@@ -90,13 +86,26 @@ def docker_tag(
 
 
 def docker_push(registry: str, tag: str):
-    # We can't use docker-py here
-    # as it doesn't support DOCKER_CONTENT_TRUST
-    # env variable, which could be needed
-    cp = subprocess.run(
-        ["docker", "push", f"{registry}:{tag}"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    if cp.returncode != 0:
-        raise SonarAPIError(cp.stderr)
+    def inner_docker_push(should_raise=False):
+
+        # We can't use docker-py here
+        # as it doesn't support DOCKER_CONTENT_TRUST
+        # env variable, which could be needed
+        cp = subprocess.run(
+            ["docker", "push", f"{registry}:{tag}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if cp.returncode != 0:
+            if should_raise:
+                raise SonarAPIError(cp.stderr)
+
+            return False
+
+        return True
+
+    retries = 3
+    while retries >= 0:
+        if inner_docker_push(retries == 0):
+            break
+        retries -= 1
