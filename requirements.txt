@@ -6,3 +6,6 @@ pytest==6.2.4
 pyyaml==5.4.1
 pytest-cov==2.12.1
 pytest-mock==3.6.1
+
+# Pin to working markupsafe
+MarkupSafe==2.0.1
