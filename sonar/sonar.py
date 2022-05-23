@@ -570,7 +570,7 @@ def task_docker_build(ctx: Context):
 
     labels = interpolate_dict(ctx, ctx.stage.get("labels", {}))
 
-    image = docker_build(docker_context, dockerfile, buildargs=buildargs, labels=labels)
+    image = docker_build(docker_context, dockerfile, buildargs=buildargs, labels=labels, platform=ctx.image.get("platform"))
 
     for output in ctx.stage["output"]:
         registry = ctx.I(output["registry"])
