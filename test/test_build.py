@@ -57,11 +57,10 @@ def test_find_dockerfile_fetches_file_from_url(patched_urlretrieve, patched_temp
     assert dockerfile == "/localfile/somewhere"
 
 
-@patch("sonar.sonar.docker_push")
 @patch("sonar.sonar.docker_tag")
 @patch("sonar.sonar.docker_build")
-def test_labels_are_passed_to_docker_push(_docker_build, _docker_tag, patched_docker_push):
-    pipeline = process_image(
+def test_labels_are_passed_to_docker_build(_docker_build, _docker_tag):
+    _ = process_image(
         image_name="image1",
         skip_tags=[],
         include_tags=[],
@@ -72,8 +71,40 @@ def test_labels_are_passed_to_docker_push(_docker_build, _docker_tag, patched_do
 
     # the labels have been specified in the test scenario and should be passed to docker_build.
     calls = [
-        call(".", "Dockerfile", buildargs={}, labels={"label-0": "value-0", "label-1": "value-1", "label-2": "value-2"})
+        call(".", "Dockerfile", buildargs={}, labels={"label-0": "value-0", "label-1": "value-1", "label-2": "value-2"}, platform=None)
     ]
 
     _docker_build.assert_has_calls(calls)
     _docker_build.assert_called_once()
+
+
+@patch("sonar.sonar.docker_tag")
+@patch("sonar.sonar.docker_build")
+def test_platform_is_passed_to_docker_build(_docker_build, _docker_tag):
+    # platform in image is set
+    _ = process_image(
+        image_name="image1",
+        skip_tags=[],
+        include_tags=[],
+        build_args={},
+        build_options={},
+        inventory="test/yaml_scenario11.yaml",
+    )
+
+    # platform is not specified
+    _ = process_image(
+        image_name="image2",
+        skip_tags=[],
+        include_tags=[],
+        build_args={},
+        build_options={},
+        inventory="test/yaml_scenario11.yaml",
+    )
+
+    calls = [
+        call(".", "Dockerfile", buildargs={}, labels={"label-0": "value-0"}, platform="linux/amd64"),
+        call(".", "Dockerfile", buildargs={}, labels={"label-1": "value-1"}, platform=None)
+    ]
+
+    _docker_build.assert_has_calls(calls)
+    _docker_build.assert_called()

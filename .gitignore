@@ -9,3 +9,4 @@ build
 htmlcov
 
 sonar.egg-info/*
+sonar.iml

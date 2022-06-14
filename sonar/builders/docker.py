@@ -17,6 +17,7 @@ def docker_build(
     dockerfile: str,
     buildargs: Optional[Dict[str, str]] = None,
     labels: Optional[Dict[str, str]] = None,
+    platform: Optional[str] = None,
 ):
     """Builds a docker image."""
     client = docker_client()
@@ -33,16 +34,13 @@ def docker_build(
 
     buildargs_str = buildarg_from_dict(buildargs)
     labels_str = labels_from_dict(labels)
+    platform_str = f" --platform {platform}" if platform is not None else ""
 
-    logger.info(
-        "docker build {context} -f {dockerfile} {buildargs} {labels}".format(
-            context=path, dockerfile=dockerfile, buildargs=buildargs_str, labels=labels_str,
-        )
-    )
+    logger.info(f"docker build {path}{platform_str} -f {dockerfile} {buildargs_str} {labels_str}")
 
     try:
         image, _ = client.images.build(
-            path=path, dockerfile=dockerfile, tag=image_name, buildargs=buildargs, labels=labels,
+            path=path, dockerfile=dockerfile, tag=image_name, buildargs=buildargs, labels=labels, platform=platform,
         )
         return image
     except (docker.errors.BuildError) as e:
