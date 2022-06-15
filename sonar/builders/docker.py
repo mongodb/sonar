@@ -61,6 +61,24 @@ def docker_build_cli(
         labels=Optional[Dict[str, str]],
         platform=Optional[str]
 ):
+    args = get_docker_build_cli_args(path=path, dockerfile=dockerfile, tag=tag, buildargs=buildargs, labels=labels, platform=platform)
+
+    args_str = " ".join(args)
+    logger.info(f"executing cli docker build: {args_str}")
+
+    cp = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if cp.returncode != 0:
+        raise SonarAPIError(cp.stderr)
+
+
+def get_docker_build_cli_args(
+        path: str,
+        dockerfile: str,
+        tag: str,
+        buildargs: Optional[Dict[str, str]],
+        labels=Optional[Dict[str, str]],
+        platform=Optional[str]
+):
     args = ["docker", "build", path, "-f", dockerfile, "-t", tag]
     if buildargs is not None:
         for k, v in buildargs.items():
@@ -76,12 +94,7 @@ def docker_build_cli(
         args.append("--platform")
         args.append(platform)
 
-    args_str = " ".join(args)
-    logger.info(f"executing cli docker build: {args_str}")
-
-    cp = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if cp.returncode != 0:
-        raise SonarAPIError(cp.stderr)
+    return args
 
 
 def docker_pull(
