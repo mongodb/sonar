@@ -4,6 +4,7 @@ import subprocess
 from typing import Dict, Optional
 
 import docker
+import docker.errors
 
 from . import SonarAPIError, SonarBuildError, buildarg_from_dict, labels_from_dict
 
@@ -13,40 +14,32 @@ def docker_client() -> docker.DockerClient:
 
 
 def docker_build(
-    path: str,
-    dockerfile: str,
-    buildargs: Optional[Dict[str, str]] = None,
-    labels: Optional[Dict[str, str]] = None,
-    platform: Optional[str] = None,
+        path: str,
+        dockerfile: str,
+        buildargs: Optional[Dict[str, str]] = None,
+        labels: Optional[Dict[str, str]] = None,
+        platform: Optional[str] = None,
 ):
     """Builds a docker image."""
-    client = docker_client()
-
     logger = logging.getLogger(__name__)
 
     image_name = "sonar-docker-build-{}".format(random.randint(1, 10000))
 
-    logger.info("Path: {}".format(path))
+    logger.info("path: {}".format(path))
     logger.info("dockerfile: {}".format(dockerfile))
     logger.info("tag: {}".format(image_name))
     logger.info("buildargs: {}".format(buildargs))
     logger.info("labels: {}".format(labels))
 
-    buildargs_str = buildarg_from_dict(buildargs)
-    labels_str = labels_from_dict(labels)
-    platform_str = f" --platform {platform}" if platform is not None else ""
-
-    logger.info(f"docker build {path}{platform_str} -f {dockerfile} {buildargs_str} {labels_str}")
-
     try:
-        image, _ = client.images.build(
-            path=path, dockerfile=dockerfile, tag=image_name, buildargs=buildargs, labels=labels, platform=platform,
+        # docker build from docker-py has bugs resulting in errors or invalid platform when building with specified --platform=linux/amd64 on M1
+        docker_build_cli(
+            logger=logger, path=path, dockerfile=dockerfile, tag=image_name, buildargs=buildargs, labels=labels, platform=platform,
         )
-        return image
-    except (docker.errors.BuildError) as e:
-        raise SonarBuildError(_get_build_log(e)) from e
 
-    except (docker.errors.APIError) as e:
+        client = docker_client()
+        return client.images.get(image_name)
+    except docker.errors.APIError as e:
         raise SonarAPIError from e
 
 
@@ -60,9 +53,40 @@ def _get_build_log(e: docker.errors.BuildError) -> str:
     return build_logs
 
 
+def docker_build_cli(
+        logger: logging.Logger,
+        path: str, dockerfile: str,
+        tag: str,
+        buildargs: Optional[Dict[str, str]],
+        labels=Optional[Dict[str, str]],
+        platform=Optional[str]
+):
+    args = ["docker", "build", path, "-f", dockerfile, "-t", tag]
+    if buildargs is not None:
+        for k, v in buildargs.items():
+            args.append("--build-arg")
+            args.append(f"{k}={v}")
+
+    if labels is not None:
+        for k, v in labels.items():
+            args.append("--label")
+            args.append(f"{k}={v}")
+
+    if platform is not None:
+        args.append("--platform")
+        args.append(platform)
+
+    args_str = " ".join(args)
+    logger.info(f"executing cli docker build: {args_str}")
+
+    cp = subprocess.run(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if cp.returncode != 0:
+        raise SonarAPIError(cp.stderr)
+
+
 def docker_pull(
-    image: str,
-    tag: str,
+        image: str,
+        tag: str,
 ):
     client = docker_client()
 
@@ -73,9 +97,9 @@ def docker_pull(
 
 
 def docker_tag(
-    image: docker.models.images.Image,
-    registry: str,
-    tag: str,
+        image: docker.models.images.Image,
+        registry: str,
+        tag: str,
 ):
     try:
         return image.tag(registry, tag)
