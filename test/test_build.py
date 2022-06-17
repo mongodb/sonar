@@ -1,11 +1,11 @@
+from types import SimpleNamespace as sn
+from unittest.mock import patch, mock_open, call
+
+from sonar.builders.docker import get_docker_build_cli_args
 from sonar.sonar import (
     process_image,
     find_dockerfile,
 )
-
-from types import SimpleNamespace as sn
-
-from unittest.mock import patch, mock_open, call
 
 
 @patch("sonar.sonar.docker_push")
@@ -14,11 +14,11 @@ from unittest.mock import patch, mock_open, call
 @patch("sonar.sonar.urlretrieve")
 @patch("sonar.sonar.create_ecr_repository")
 def test_dockerfile_from_url(
-    patched_docker_build,
-    patched_docker_tag,
-    patched_docker_push,
-    patched_urlretrive,
-    patched_create_ecr_repository,
+        patched_docker_build,
+        patched_docker_tag,
+        patched_docker_push,
+        patched_urlretrive,
+        patched_create_ecr_repository,
 ):
     with open("test/yaml_scenario6.yaml") as fd:
         with patch("builtins.open", mock_open(read_data=fd.read())) as _mock_file:
@@ -108,3 +108,9 @@ def test_platform_is_passed_to_docker_build(_docker_build, _docker_tag):
 
     _docker_build.assert_has_calls(calls)
     _docker_build.assert_called()
+
+
+def test_get_docker_build_cli_args():
+    assert "docker buildx build --progress plain . -f dockerfile -t image:latest" == " ".join(get_docker_build_cli_args(".", "dockerfile", "image:latest", None, None, None))
+    assert "docker buildx build --progress plain . -f dockerfile -t image:latest --build-arg a=1 --build-arg long_arg=long_value --label l1=v1 --label l2=v2 --platform linux/amd64" == " ".join(
+        get_docker_build_cli_args(".", "dockerfile", "image:latest", {"a": "1", "long_arg": "long_value"}, {"l1": "v1", "l2": "v2"}, "linux/amd64"))
