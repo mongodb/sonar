@@ -111,6 +111,6 @@ def test_platform_is_passed_to_docker_build(_docker_build, _docker_tag):
 
 
 def test_get_docker_build_cli_args():
-    assert "docker build . -f dockerfile -t image:latest" == " ".join(get_docker_build_cli_args(".", "dockerfile", "image:latest", None, None, None))
-    assert "docker build . -f dockerfile -t image:latest --build-arg a=1 --build-arg long_arg=long_value --label l1=v1 --label l2=v2 --platform linux/amd64" == " ".join(
+    assert "docker buildx build --progress plain . -f dockerfile -t image:latest" == " ".join(get_docker_build_cli_args(".", "dockerfile", "image:latest", None, None, None))
+    assert "docker buildx build --progress plain . -f dockerfile -t image:latest --build-arg a=1 --build-arg long_arg=long_value --label l1=v1 --label l2=v2 --platform linux/amd64" == " ".join(
         get_docker_build_cli_args(".", "dockerfile", "image:latest", {"a": "1", "long_arg": "long_value"}, {"l1": "v1", "l2": "v2"}, "linux/amd64"))

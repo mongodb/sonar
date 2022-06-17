@@ -61,7 +61,12 @@ def docker_build_cli(
         labels=Optional[Dict[str, str]],
         platform=Optional[str]
 ):
-    args = get_docker_build_cli_args(path=path, dockerfile=dockerfile, tag=tag, buildargs=buildargs, labels=labels, platform=platform)
+    dockerfile_path = dockerfile
+    # if dockerfile is relative it has to be set as relative to context (path)
+    if not dockerfile_path.startswith('/'):
+        dockerfile_path = f"{path}/{dockerfile_path}"
+
+    args = get_docker_build_cli_args(path=path, dockerfile=dockerfile_path, tag=tag, buildargs=buildargs, labels=labels, platform=platform)
 
     args_str = " ".join(args)
     logger.info(f"executing cli docker build: {args_str}")
@@ -79,7 +84,7 @@ def get_docker_build_cli_args(
         labels=Optional[Dict[str, str]],
         platform=Optional[str]
 ):
-    args = ["docker", "build", path, "-f", dockerfile, "-t", tag]
+    args = ["docker", "buildx", "build", "--progress", "plain", path, "-f", dockerfile, "-t", tag]
     if buildargs is not None:
         for k, v in buildargs.items():
             args.append("--build-arg")
