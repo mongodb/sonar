@@ -84,7 +84,7 @@ def get_docker_build_cli_args(
         labels=Optional[Dict[str, str]],
         platform=Optional[str]
 ):
-    args = ["docker", "buildx", "build", "--progress", "plain", path, "-f", dockerfile, "-t", tag]
+    args = ["docker", "buildx", "build", "--load" , "--progress", "plain", path, "-f", dockerfile, "-t", tag]
     if buildargs is not None:
         for k, v in buildargs.items():
             args.append("--build-arg")
