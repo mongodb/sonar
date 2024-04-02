@@ -564,7 +564,9 @@ def task_docker_build(ctx: Context):
     """
     docker_context = find_docker_context(ctx)
 
-    platform = ctx.I(ctx.image.get("platform"))
+    platform = ctx.image.get("platform")
+    if platform:
+        platform = ctx.I(platform)
 
     dockerfile = find_dockerfile(ctx.I(ctx.stage["dockerfile"]))
 
