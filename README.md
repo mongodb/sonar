@@ -1,4 +1,5 @@
 # Project Status
+
 Note: This repository is currently not under active development. While the code and documentation remain accessible for reference and educational purposes, there will be no regular updates, bug fixes, or feature additions in the foreseeable future.
 
 If you encounter issues or have questions, you are welcome to open an issue or a pull request. However, please be aware that responses and reviews may be significantly delayed.
